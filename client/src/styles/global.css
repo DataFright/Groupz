@@ -1,0 +1,62 @@
+*, *::before, *::after {
+  box-sizing: border-box;
+  margin: 0;
+  padding: 0;
+}
+
+html, body, #root {
+  height: 100%;
+  width: 100%;
+  overflow: hidden;
+}
+
+body {
+  font-family: system-ui, -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif;
+  background: #0f172a;
+  color: #f1f5f9;
+  -webkit-font-smoothing: antialiased;
+}
+
+/* Emoji markers rendered via L.divIcon */
+.emoji-marker {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  width: 44px;
+  height: 44px;
+  font-size: 28px;
+  filter: drop-shadow(0 2px 4px rgba(0,0,0,0.5));
+  transition: opacity 0.3s;
+}
+
+.emoji-marker--me {
+  animation: pulse-ring 2s infinite;
+}
+
+.emoji-marker--inactive {
+  opacity: 0.4;
+  filter: grayscale(0.8) drop-shadow(0 2px 4px rgba(0,0,0,0.3));
+}
+
+@keyframes pulse-ring {
+  0%   { filter: drop-shadow(0 0 0px #3b82f6) drop-shadow(0 2px 4px rgba(0,0,0,0.5)); }
+  50%  { filter: drop-shadow(0 0 8px #3b82f6) drop-shadow(0 2px 4px rgba(0,0,0,0.5)); }
+  100% { filter: drop-shadow(0 0 0px #3b82f6) drop-shadow(0 2px 4px rgba(0,0,0,0.5)); }
+}
+
+/* Leaflet tooltip styling */
+.member-tooltip {
+  background: rgba(15, 23, 42, 0.85) !important;
+  border: 1px solid rgba(99, 102, 241, 0.4) !important;
+  border-radius: 6px !important;
+  color: #f1f5f9 !important;
+  font-size: 12px !important;
+  font-weight: 600 !important;
+  padding: 3px 8px !important;
+  white-space: nowrap !important;
+  box-shadow: 0 2px 8px rgba(0,0,0,0.4) !important;
+}
+
+.member-tooltip::before {
+  display: none !important;
+}

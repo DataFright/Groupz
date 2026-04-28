@@ -1,0 +1,32 @@
+.grid {
+  display: grid;
+  grid-template-columns: repeat(5, 1fr);
+  gap: 6px;
+}
+
+.cell {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  min-height: 52px;
+  font-size: 24px;
+  background: rgba(15, 23, 42, 0.6);
+  border: 2px solid transparent;
+  border-radius: 10px;
+  cursor: pointer;
+  transition: background 0.1s, border-color 0.1s, transform 0.1s;
+  padding: 0;
+}
+
+.cell:hover {
+  background: rgba(99, 102, 241, 0.15);
+}
+
+.cell:active {
+  transform: scale(0.92);
+}
+
+.selected {
+  border-color: #6366f1;
+  background: rgba(99, 102, 241, 0.2);
+}
