@@ -18,27 +18,32 @@ function once(socket, event) {
   return new Promise(resolve => socket.once(event, resolve))
 }
 
-describe('Integration tests — real-time multi-client flows', () => {
-  let httpServer, io, groups, socketToGroup, cleanupTimer, serverUrl
+// Shared server state — both suites in this file use the same instance.
+let httpServer, io, groups, socketToGroup, cleanupTimer, serverUrl
 
-  beforeAll(async () => {
-    ;({ httpServer, io, groups, socketToGroup, cleanupTimer } = createApp({ corsOrigin: '*' }))
-    await new Promise(resolve => httpServer.listen(0, resolve))
-    serverUrl = `http://localhost:${httpServer.address().port}`
-  })
+async function setup() {
+  ;({ httpServer, io, groups, socketToGroup, cleanupTimer } = createApp({ corsOrigin: '*' }))
+  await new Promise(resolve => httpServer.listen(0, resolve))
+  serverUrl = `http://localhost:${httpServer.address().port}`
+}
 
-  afterAll(async () => {
-    clearInterval(cleanupTimer)
-    await new Promise(resolve => io.close(resolve))
-    await new Promise(resolve => httpServer.close(resolve))
-  })
+async function teardown() {
+  clearInterval(cleanupTimer)
+  await new Promise(resolve => io.close(resolve))
+  await new Promise(resolve => httpServer.close(resolve))
+}
 
-  afterEach(async () => {
-    io.disconnectSockets(true)
-    await new Promise(r => setTimeout(r, 100))
-    Object.keys(groups).forEach(k => delete groups[k])
-    Object.keys(socketToGroup).forEach(k => delete socketToGroup[k])
-  })
+async function reset() {
+  io.disconnectSockets(true)
+  await new Promise(r => setTimeout(r, 100))
+  Object.keys(groups).forEach(k => delete groups[k])
+  Object.keys(socketToGroup).forEach(k => delete socketToGroup[k])
+}
+
+describe('Integration — Part 1: session, host transfer, and lifecycle', () => {
+  beforeAll(setup)
+  afterAll(teardown)
+  afterEach(reset)
 
   // ─── Full session flow ──────────────────────────────────────────────────────
 
@@ -177,6 +182,12 @@ describe('Integration tests — real-time multi-client flows', () => {
     expect([r1.status, r2.status, r3.status]).toEqual([200, 200, 200])
     expect(groups[code]).toBeUndefined()
   })
+})
+
+describe('Integration — Part 2: member management, location, and edge cases', () => {
+  beforeAll(setup)
+  afterAll(teardown)
+  afterEach(reset)
 
   // ─── remove-member cascade ─────────────────────────────────────────────────
 

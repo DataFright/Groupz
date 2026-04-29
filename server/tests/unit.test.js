@@ -2,9 +2,9 @@ import { describe, it, expect } from 'vitest'
 import { validateInput, generateCode, buildMemberList, ALLOWED_ICONS } from '../src/helpers.js'
 import { ErrorCode } from '../src/errorCodes.js'
 
-// ─── validateInput ────────────────────────────────────────────────────────────
+// ─── validateInput — name validation ─────────────────────────────────────────
 
-describe('validateInput', () => {
+describe('validateInput — name validation', () => {
   it('returns null for a valid name and allowed icon', () => {
     expect(validateInput('Alice', '🦊')).toBeNull()
   })
@@ -39,7 +39,11 @@ describe('validateInput', () => {
   it('returns INVALID_NAME for non-string name', () => {
     expect(validateInput(42, '🦊').code).toBe(ErrorCode.INVALID_NAME)
   })
+})
 
+// ─── validateInput — icon validation ─────────────────────────────────────────
+
+describe('validateInput — icon validation', () => {
   it('returns INVALID_ICON (400) for an icon not in the allowed set', () => {
     const err = validateInput('Alice', '🤠')
     expect(err.code).toBe(ErrorCode.INVALID_ICON)
