@@ -16,3 +16,13 @@ Cypress.Commands.add('createGroupViaUI', (name = 'Alice') => {
   cy.get('button[type="submit"]').click()
   cy.contains('button', 'End Group', { timeout: 10000 }).should('be.visible')
 })
+
+// Navigate to the map view by joining an existing group via the Home form.
+// Waits until the Leaflet map is visible (non-host) before resolving.
+Cypress.Commands.add('joinGroupViaUI', (code, name = 'Bob') => {
+  cy.contains('button[type="button"]', 'Join Group').click()
+  cy.get('input[placeholder="Enter 6-character code"]').type(code)
+  cy.get('input[placeholder="Enter your name"]').type(name)
+  cy.get('button[type="submit"]').click()
+  cy.get('.leaflet-container', { timeout: 10000 }).should('exist')
+})

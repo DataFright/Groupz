@@ -5,6 +5,14 @@ const { io } = require('socket.io-client')
 // createGroupAndHold is used. Released by the releaseGroupSocket task.
 let heldSocket = null
 
+// Second held socket for tests where the browser is the host and a task
+// member joins as a non-host. Released by the releaseJoinSocket task.
+let heldJoinSocket = null
+
+// Named socket pool for scenario tests that need multiple concurrent task
+// sockets across one or more groups. Keyed by caller-supplied id string.
+let socketPool = {}
+
 module.exports = defineConfig({
   e2e: {
     baseUrl: 'http://localhost:3000',
@@ -47,6 +55,79 @@ module.exports = defineConfig({
         releaseGroupSocket() {
           heldSocket?.disconnect()
           heldSocket = null
+          return null
+        },
+
+        // Joins an existing group and keeps the member socket alive so tests
+        // can observe the group from the host's perspective in the browser.
+        // Pass lat/lng to immediately emit a location-update after joining.
+        // Returns the joined member's socketId.
+        joinGroupAndHold({ code, name = 'Task Member', icon = '🐸', lat = null, lng = null } = {}) {
+          return new Promise((resolve, reject) => {
+            heldJoinSocket = io('http://localhost:3001', { reconnection: false })
+            const t = setTimeout(() => { heldJoinSocket?.disconnect(); heldJoinSocket = null; reject(new Error('joinGroupAndHold timed out')) }, 8000)
+            heldJoinSocket.once('join-confirmed', ({ socketId }) => {
+              clearTimeout(t)
+              if (lat !== null && lng !== null) {
+                heldJoinSocket.emit('location-update', { lat, lng })
+              }
+              resolve(socketId)
+            })
+            heldJoinSocket.once('join-error', ({ message }) => { clearTimeout(t); heldJoinSocket = null; reject(new Error(message)) })
+            heldJoinSocket.once('connect_error', err => { clearTimeout(t); reject(err) })
+            heldJoinSocket.once('connect', () => heldJoinSocket.emit('join-group', { code, name, icon }))
+          })
+        },
+
+        // Disconnects and releases the held join socket.
+        releaseJoinSocket() {
+          heldJoinSocket?.disconnect()
+          heldJoinSocket = null
+          return null
+        },
+
+        // Creates a group from Node, stores the socket in the pool under id,
+        // and resolves with the 6-char group code.
+        createGroupInPool({ id, name = 'Task Host', icon = '🦊' } = {}) {
+          return new Promise((resolve, reject) => {
+            const socket = io('http://localhost:3001', { reconnection: false })
+            const t = setTimeout(() => { socket.disconnect(); reject(new Error('createGroupInPool timed out')) }, 8000)
+            socket.once('group-created', ({ code }) => { clearTimeout(t); socketPool[id] = socket; resolve(code) })
+            socket.once('connect_error', err => { clearTimeout(t); reject(err) })
+            socket.once('connect', () => socket.emit('create-group', { name, icon }))
+          })
+        },
+
+        // Joins an existing group from Node, stores the socket in the pool
+        // under id, and resolves with the joined member's socketId.
+        // Pass lat/lng to immediately emit a location-update after joining.
+        joinGroupInPool({ id, code, name = 'Task Member', icon = '🐸', lat = null, lng = null } = {}) {
+          return new Promise((resolve, reject) => {
+            const socket = io('http://localhost:3001', { reconnection: false })
+            const t = setTimeout(() => { socket.disconnect(); reject(new Error('joinGroupInPool timed out')) }, 8000)
+            socket.once('join-confirmed', ({ socketId }) => {
+              clearTimeout(t)
+              socketPool[id] = socket
+              if (lat !== null && lng !== null) socket.emit('location-update', { lat, lng })
+              resolve(socketId)
+            })
+            socket.once('join-error', ({ message }) => { clearTimeout(t); reject(new Error(message)) })
+            socket.once('connect_error', err => { clearTimeout(t); reject(err) })
+            socket.once('connect', () => socket.emit('join-group', { code, name, icon }))
+          })
+        },
+
+        // Disconnects and removes one socket from the pool by id.
+        releasePoolSocket({ id } = {}) {
+          socketPool[id]?.disconnect()
+          delete socketPool[id]
+          return null
+        },
+
+        // Disconnects and clears all pool sockets.
+        releaseAllPoolSockets() {
+          Object.values(socketPool).forEach(s => s?.disconnect())
+          socketPool = {}
           return null
         },
       })
