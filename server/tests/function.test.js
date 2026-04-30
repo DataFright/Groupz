@@ -20,9 +20,15 @@ function once(socket, event) {
 }
 
 async function createGroup(client, name = 'Alice', icon = '🦊') {
-  const p = once(client, 'group-created')
-  client.emit('create-group', { name, icon })
-  return p
+  // Drain both events emitted by create-group in the same handler so that
+  // subsequent once('members-update') listeners in tests only capture events
+  // from later operations (e.g. location-update), not from this initial emit.
+  const [payload] = await Promise.all([
+    once(client, 'group-created'),
+    once(client, 'members-update'),
+    Promise.resolve(client.emit('create-group', { name, icon })),
+  ])
+  return payload
 }
 
 async function joinGroup(client, code, name = 'Bob', icon = '🐻') {
@@ -223,6 +229,57 @@ describe('Function tests — socket event handlers', () => {
       c.emit('location-update', { lat: 10, lng: 10 })
       await new Promise(r => setTimeout(r, 100))
       expect(Object.keys(groups)).toHaveLength(0)
+    })
+
+    // ── Rate limiting ──────────────────────────────────────────────────────────
+
+    it('the first update after joining is never rate-limited', async () => {
+      // lastLocationSeen starts at 0, so the first update always passes
+      // regardless of how quickly it arrives after joining.
+      const c = await connect(serverUrl)
+      await createGroup(c)
+      const p = once(c, 'members-update')
+      c.emit('location-update', { lat: 51.5074, lng: -0.1278 })
+      const list = await p
+      expect(list.find(m => m.socketId === c.id).lat).toBe(51.5074)
+    })
+
+    it('a second update arriving within 1 s of the first is silently dropped', async () => {
+      const c = await connect(serverUrl)
+      const { code } = await createGroup(c)
+
+      // First update — goes through
+      await new Promise(resolve => {
+        c.once('members-update', resolve)
+        c.emit('location-update', { lat: 10, lng: 10 })
+      })
+      expect(groups[code].members[c.id].lat).toBe(10)
+
+      // Immediate second update — rate-limited, dropped silently
+      c.emit('location-update', { lat: 20, lng: 20 })
+      await new Promise(r => setTimeout(r, 100))
+      expect(groups[code].members[c.id].lat).toBe(10) // unchanged
+    })
+
+    it('an update arriving more than 1 s after the previous is accepted', async () => {
+      const c = await connect(serverUrl)
+      const { code } = await createGroup(c)
+
+      // First update
+      await new Promise(resolve => {
+        c.once('members-update', resolve)
+        c.emit('location-update', { lat: 10, lng: 10 })
+      })
+
+      // Backdate lastLocationSeen to simulate >1 s elapsed
+      groups[code].members[c.id].lastLocationSeen = Date.now() - 1100
+
+      // Second update — should pass
+      await new Promise(resolve => {
+        c.once('members-update', resolve)
+        c.emit('location-update', { lat: 20, lng: 20 })
+      })
+      expect(groups[code].members[c.id].lat).toBe(20)
     })
   })
 

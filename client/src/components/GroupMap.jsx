@@ -1,4 +1,4 @@
-import { useState, useEffect, useRef } from 'react'
+import { useState, useEffect, useRef, useCallback } from 'react'
 import { MapContainer, TileLayer, Marker, Tooltip } from 'react-leaflet'
 import L from 'leaflet'
 import 'leaflet/dist/leaflet.css'
@@ -28,21 +28,36 @@ function createEmojiIcon(icon, isMe, active) {
   })
 }
 
-// Inner component that has access to the map instance
-function MapController({ members, mySocketId }) {
+// Inner component that has access to the map instance via react-leaflet context.
+// Lives inside MapContainer so it can call useMap() and useEffect() with map access.
+function MapController({ members, mySocketId, onGeoError, flyToMeRef }) {
   const hasCenteredRef = useRef(false)
   const mapRef = useRef(null)
+  const myPosRef = useRef(null)   // last known [lat, lng] for the re-center button
 
-  // Get map instance via ref callback
-  const getMap = (map) => { mapRef.current = map }
+  // Write a flyTo closure into the parent-owned ref so the re-center button
+  // can trigger a map animation without this component re-rendering.
+  const getMap = useCallback((map) => {
+    mapRef.current = map
+    flyToMeRef.current = () => {
+      if (mapRef.current && myPosRef.current) {
+        mapRef.current.flyTo(myPosRef.current, 15, { duration: 1 })
+      }
+    }
+  }, [flyToMeRef])
 
   useEffect(() => {
-    if (!navigator.geolocation) return
+    if (!navigator.geolocation) {
+      onGeoError('Geolocation is not supported by this browser.')
+      return
+    }
 
     const intervalId = setInterval(() => {
       navigator.geolocation.getCurrentPosition(
         (pos) => {
           const { latitude: lat, longitude: lng } = pos.coords
+          myPosRef.current = [lat, lng]
+          onGeoError(null)
           socket.emit('location-update', { lat, lng })
 
           if (!hasCenteredRef.current && mapRef.current) {
@@ -50,13 +65,16 @@ function MapController({ members, mySocketId }) {
             hasCenteredRef.current = true
           }
         },
-        (err) => console.warn('Geolocation error:', err.message),
+        (err) => {
+          console.warn('Geolocation error:', err.message)
+          onGeoError(err.message)
+        },
         { enableHighAccuracy: true, timeout: 5000, maximumAge: 0 }
       )
     }, 2500)
 
     return () => clearInterval(intervalId)
-  }, [])
+  }, [onGeoError])
 
   return (
     <>
@@ -79,7 +97,6 @@ function MapController({ members, mySocketId }) {
           </Marker>
         ))
       }
-      {/* Store map ref via a hidden element with a ref callback pattern */}
       <SetMapRef onMap={getMap} />
     </>
   )
@@ -98,6 +115,8 @@ export default function GroupMap({ groupInfo, onLeave }) {
   const [showMembers, setShowMembers] = useState(false)
   const [showEndConfirm, setShowEndConfirm] = useState(false)
   const [showLeaveConfirm, setShowLeaveConfirm] = useState(false)
+  const [geoError, setGeoError] = useState(null)
+  const flyToMeRef = useRef(null)
   const { code, mySocketId, isHost, hostSocketId } = groupInfo
 
   useEffect(() => {
@@ -122,7 +141,7 @@ export default function GroupMap({ groupInfo, onLeave }) {
     socket.emit('end-group')
   }
 
-  const activeMemberCount = members.filter(m => m.active).length
+  const activeMemberCount = members.length
 
   return (
     <div className={styles.wrapper}>
@@ -137,7 +156,12 @@ export default function GroupMap({ groupInfo, onLeave }) {
           attribution='&copy; <a href="https://www.openstreetmap.org/copyright">OpenStreetMap</a> contributors'
           url="https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png"
         />
-        <MapController members={members} mySocketId={mySocketId} />
+        <MapController
+          members={members}
+          mySocketId={mySocketId}
+          onGeoError={setGeoError}
+          flyToMeRef={flyToMeRef}
+        />
       </MapContainer>
 
       {/* Top bar */}
@@ -158,8 +182,23 @@ export default function GroupMap({ groupInfo, onLeave }) {
         )}
       </div>
 
+      {/* Geolocation error banner */}
+      {geoError && (
+        <div className={styles.geoError}>
+          <span>📍 Location unavailable: {geoError}</span>
+          <button className={styles.geoErrorDismiss} onClick={() => setGeoError(null)} aria-label="Dismiss location error">✕</button>
+        </div>
+      )}
+
       {/* Bottom-right controls */}
       <div className={styles.bottomRight}>
+        <button
+          className={styles.fab}
+          onClick={() => flyToMeRef.current?.()}
+          aria-label="Re-center map"
+        >
+          🎯
+        </button>
         <button
           className={styles.fab}
           onClick={() => setShowMembers(v => !v)}

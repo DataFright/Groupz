@@ -5,22 +5,7 @@ export default function GroupCodeOverlay({ code }) {
   const [copied, setCopied] = useState(false)
 
   function handleCopy() {
-    const text = code
-    if (navigator.clipboard) {
-      navigator.clipboard.writeText(text).then(() => showCopied())
-    } else {
-      // Fallback for non-HTTPS or older browsers
-      const ta = document.createElement('textarea')
-      ta.value = text
-      ta.style.position = 'fixed'
-      ta.style.opacity = '0'
-      document.body.appendChild(ta)
-      ta.focus()
-      ta.select()
-      document.execCommand('copy')
-      document.body.removeChild(ta)
-      showCopied()
-    }
+    navigator.clipboard.writeText(code).then(() => showCopied())
   }
 
   function showCopied() {

@@ -8,9 +8,9 @@
     "preview": "vite preview",
     "test": "vitest run",
     "test:watch": "vitest",
-    "cy:run": "cross-env ELECTRON_RUN_AS_NODE= cypress run --browser chrome --headless",
-    "cy:open": "cross-env ELECTRON_RUN_AS_NODE= cypress open",
-    "e2e": "cross-env ELECTRON_RUN_AS_NODE= start-server-and-test \"npm start --prefix ../server\" http-get://localhost:3001/health \"npm run dev\" http://localhost:3000 cy:run"
+    "cy:run": "node scripts/cypress-run.cjs run --browser chrome --headless",
+    "cy:open": "node scripts/cypress-run.cjs open",
+    "e2e": "start-server-and-test \"npm start --prefix ../server\" http-get://localhost:3001/health \"npm run dev\" http://localhost:3000 cy:run"
   },
   "dependencies": {
     "leaflet": "^1.9.4",

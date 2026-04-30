@@ -36,16 +36,28 @@ export default function App() {
       )
     }
 
+    // 'io client disconnect' means we called socket.disconnect() intentionally;
+    // anything else is an unexpected drop — send the user home with a message.
+    function onDisconnect(reason) {
+      if (reason !== 'io client disconnect') {
+        setView('home')
+        setGroupInfo(null)
+        setNotification('Connection lost. Please check your network and try again.')
+      }
+    }
+
     socket.on('removed-from-group', onRemovedFromGroup)
     socket.on('group-ended', onGroupEnded)
     socket.on('left-group', onLeftGroup)
     socket.on('host-changed', onHostChanged)
+    socket.on('disconnect', onDisconnect)
 
     return () => {
       socket.off('removed-from-group', onRemovedFromGroup)
       socket.off('group-ended', onGroupEnded)
       socket.off('left-group', onLeftGroup)
       socket.off('host-changed', onHostChanged)
+      socket.off('disconnect', onDisconnect)
     }
   }, [])
 

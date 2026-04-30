@@ -227,6 +227,9 @@ describe('Integration — Part 2: member management, location, and edge cases', 
     })
 
     for (const [lat, lng] of [[10, 20], [11, 21], [12, 22]]) {
+      // Reset the rate-limit timestamp so rapid test updates aren't dropped.
+      // In production the client sends every 2 500 ms, well above the 1 s limit.
+      groups[code].members[c.id].lastLocationSeen = 0
       await new Promise(resolve => {
         c.once('members-update', resolve)
         c.emit('location-update', { lat, lng })

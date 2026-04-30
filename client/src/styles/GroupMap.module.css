@@ -152,6 +152,37 @@
   border-color: rgba(239, 68, 68, 0.3);
 }
 
+/* Geolocation error banner */
+.geoError {
+  position: fixed;
+  bottom: 108px;
+  left: 16px;
+  right: 80px;
+  z-index: 1000;
+  background: rgba(234, 179, 8, 0.15);
+  border: 1px solid rgba(234, 179, 8, 0.35);
+  border-radius: 10px;
+  padding: 10px 12px;
+  font-size: 13px;
+  color: #fde68a;
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 8px;
+  backdrop-filter: blur(4px);
+}
+
+.geoErrorDismiss {
+  background: none;
+  border: none;
+  color: #fde68a;
+  font-size: 14px;
+  cursor: pointer;
+  padding: 2px 4px;
+  flex-shrink: 0;
+  line-height: 1;
+}
+
 /* Confirmation dialogs */
 .overlay {
   position: fixed;

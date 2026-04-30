@@ -5,7 +5,7 @@ import cors from 'cors'
 import { validateInput, generateCode, buildMemberList } from './helpers.js'
 import { ErrorCode, makeError } from './errorCodes.js'
 
-export function createApp({ corsOrigin = 'http://localhost:3000' } = {}) {
+export function createApp({ corsOrigin = 'http://localhost:3000', cleanupIntervalMs = 60_000 } = {}) {
   const groups = {}
   const socketToGroup = {}
 
@@ -50,9 +50,37 @@ export function createApp({ corsOrigin = 'http://localhost:3000' } = {}) {
   const cleanupTimer = setInterval(() => {
     const now = Date.now()
     for (const [code, group] of Object.entries(groups)) {
+      // Remove members not seen in 60s — covers stuck/zombie sockets that
+      // never triggered a disconnect event (e.g. network dropped mid-session).
+      for (const member of Object.values(group.members)) {
+        if (now - member.lastSeen > 60_000) {
+          delete group.members[member.socketId]
+          delete socketToGroup[member.socketId]
+          const target = io.sockets.sockets.get(member.socketId)
+          if (target) {
+            target.emit('removed-from-group', { status: 200 })
+            target.leave(code)
+          }
+        }
+      }
+
+      if (Object.keys(group.members).length === 0) {
+        delete groups[code]
+        continue
+      }
+
+      // Transfer host if the host was just removed
+      if (!group.members[group.hostSocketId]) {
+        const newHostId = Object.keys(group.members)[0]
+        group.hostSocketId = newHostId
+        io.to(code).emit('host-changed', { newHostSocketId: newHostId, status: 200 })
+      }
+
+      // Mark remaining members active/inactive based on 10s window
       for (const member of Object.values(group.members)) {
         member.active = now - member.lastSeen <= 10_000
       }
+
       if (now - group.lastActivity > 86_400_000) {
         io.to(code).emit('group-ended', { status: 200 })
         io.in(code).socketsLeave(code)
@@ -60,9 +88,10 @@ export function createApp({ corsOrigin = 'http://localhost:3000' } = {}) {
         delete groups[code]
         continue
       }
+
       io.to(code).emit('members-update', buildMemberList(group))
     }
-  }, 60_000)
+  }, cleanupIntervalMs)
 
   // --- Socket.IO ---
 
@@ -88,7 +117,8 @@ export function createApp({ corsOrigin = 'http://localhost:3000' } = {}) {
             icon,
             lat: null,
             lng: null,
-            lastSeen: now,
+            lastSeen: now,         // updated on every accepted location-update; used for inactivity cleanup
+            lastLocationSeen: 0,   // tracks rate limiting only; 0 = no update yet, always passes first check
             active: true,
           }
         }
@@ -122,6 +152,7 @@ export function createApp({ corsOrigin = 'http://localhost:3000' } = {}) {
           lat: null,
           lng: null,
           lastSeen: now,
+          lastLocationSeen: 0,
           active: true,
         }
       }
@@ -145,9 +176,15 @@ export function createApp({ corsOrigin = 'http://localhost:3000' } = {}) {
       if (!member) return
 
       const now = Date.now()
+      // Drop updates arriving faster than once per second to prevent flooding.
+      // Uses lastLocationSeen (not lastSeen) so the first update after joining
+      // is never blocked — lastLocationSeen starts at 0.
+      if (now - member.lastLocationSeen < 1_000) return
+
       member.lat = lat
       member.lng = lng
       member.lastSeen = now
+      member.lastLocationSeen = now
       member.active = true
       group.lastActivity = now
 
