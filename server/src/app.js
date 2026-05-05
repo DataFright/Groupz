@@ -5,7 +5,36 @@ import cors from 'cors'
 import { validateInput, generateCode, buildMemberList } from './helpers.js'
 import { ErrorCode, makeError } from './errorCodes.js'
 
-export function createApp({ corsOrigin = 'http://localhost:3000', cleanupIntervalMs = 60_000 } = {}) {
+export function createApp({
+  corsOrigin = 'http://localhost:3000',
+  cleanupIntervalMs = 60_000,
+  maxGroupAgeMs = 16 * 60 * 60 * 1000,
+  maxGroupSize = 20,
+  ipRateLimits,
+} = {}) {
+  const rlCreate = { max: ipRateLimits?.createGroup?.max ?? 100, windowMs: ipRateLimits?.createGroup?.windowMs ?? 3_600_000 }
+  const rlJoin   = { max: ipRateLimits?.joinGroup?.max  ?? 300, windowMs: ipRateLimits?.joinGroup?.windowMs  ?? 3_600_000 }
+  const ipCreateLimits = new Map()
+  const ipJoinLimits   = new Map()
+
+  function checkRateLimit(map, ip, { max, windowMs }) {
+    const now = Date.now()
+    const entry = map.get(ip) ?? { count: 0, windowStart: now }
+    if (now - entry.windowStart > windowMs) {
+      map.set(ip, { count: 1, windowStart: now })
+      return true
+    }
+    if (entry.count >= max) return false
+    entry.count++
+    map.set(ip, entry)
+    return true
+  }
+
+  function getIp(socket) {
+    return socket.handshake.headers['x-forwarded-for']?.split(',')[0].trim()
+      || socket.handshake.address
+  }
+
   const groups = {}
   const socketToGroup = {}
 
@@ -49,6 +78,14 @@ export function createApp({ corsOrigin = 'http://localhost:3000', cleanupInterva
 
   const cleanupTimer = setInterval(() => {
     const now = Date.now()
+
+    for (const [ip, entry] of ipCreateLimits) {
+      if (now - entry.windowStart > rlCreate.windowMs) ipCreateLimits.delete(ip)
+    }
+    for (const [ip, entry] of ipJoinLimits) {
+      if (now - entry.windowStart > rlJoin.windowMs) ipJoinLimits.delete(ip)
+    }
+
     for (const [code, group] of Object.entries(groups)) {
       // Remove members not seen in 60s — covers stuck/zombie sockets that
       // never triggered a disconnect event (e.g. network dropped mid-session).
@@ -81,6 +118,14 @@ export function createApp({ corsOrigin = 'http://localhost:3000', cleanupInterva
         member.active = now - member.lastSeen <= 10_000
       }
 
+      if (now - group.createdAt > maxGroupAgeMs) {
+        io.to(code).emit('group-ended', { status: 200 })
+        io.in(code).socketsLeave(code)
+        for (const sid of Object.keys(group.members)) delete socketToGroup[sid]
+        delete groups[code]
+        continue
+      }
+
       if (now - group.lastActivity > 86_400_000) {
         io.to(code).emit('group-ended', { status: 200 })
         io.in(code).socketsLeave(code)
@@ -98,6 +143,9 @@ export function createApp({ corsOrigin = 'http://localhost:3000', cleanupInterva
   io.on('connection', (socket) => {
 
     socket.on('create-group', ({ name, icon } = {}) => {
+      if (!checkRateLimit(ipCreateLimits, getIp(socket), rlCreate))
+        return socket.emit('join-error', makeError(ErrorCode.RATE_LIMITED, 'Too many groups created. Try again later.'))
+
       const err = validateInput(name, icon)
       if (err) return socket.emit('join-error', err)
 
@@ -134,11 +182,17 @@ export function createApp({ corsOrigin = 'http://localhost:3000', cleanupInterva
       const code = typeof rawCode === 'string' ? rawCode.trim().toUpperCase() : ''
       if (!code) return socket.emit('join-error', makeError(ErrorCode.CODE_REQUIRED, 'Group code is required'))
 
+      if (!checkRateLimit(ipJoinLimits, getIp(socket), rlJoin))
+        return socket.emit('join-error', makeError(ErrorCode.RATE_LIMITED, 'Too many join attempts. Try again later.'))
+
       const err = validateInput(name, icon)
       if (err) return socket.emit('join-error', err)
 
       const group = groups[code]
       if (!group) return socket.emit('join-error', makeError(ErrorCode.GROUP_NOT_FOUND, 'Group not found'))
+
+      if (!group.members[socket.id] && Object.keys(group.members).length >= maxGroupSize)
+        return socket.emit('join-error', makeError(ErrorCode.GROUP_FULL, 'This group is full (max 20 members)'))
 
       const now = Date.now()
       if (group.members[socket.id]) {
@@ -257,5 +311,5 @@ export function createApp({ corsOrigin = 'http://localhost:3000', cleanupInterva
     io.to(code).emit('members-update', buildMemberList(group))
   }
 
-  return { app, httpServer, io, groups, socketToGroup, cleanupTimer }
+  return { app, httpServer, io, groups, socketToGroup, cleanupTimer, ipCreateLimits, ipJoinLimits }
 }

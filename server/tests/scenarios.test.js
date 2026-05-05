@@ -31,10 +31,10 @@ function maybeOnce(socket, event, ms = 200) {
 }
 
 describe('Scenario tests', () => {
-  let httpServer, io, groups, socketToGroup, cleanupTimer, serverUrl, baseUrl
+  let httpServer, io, groups, socketToGroup, cleanupTimer, ipCreateLimits, ipJoinLimits, serverUrl, baseUrl
 
   beforeAll(async () => {
-    ;({ httpServer, io, groups, socketToGroup, cleanupTimer } = createApp({ corsOrigin: '*' }))
+    ;({ httpServer, io, groups, socketToGroup, cleanupTimer, ipCreateLimits, ipJoinLimits } = createApp({ corsOrigin: '*' }))
     await new Promise(resolve => httpServer.listen(0, resolve))
     const port = httpServer.address().port
     serverUrl = `http://localhost:${port}`
@@ -52,6 +52,8 @@ describe('Scenario tests', () => {
     await new Promise(r => setTimeout(r, 100))
     Object.keys(groups).forEach(k => delete groups[k])
     Object.keys(socketToGroup).forEach(k => delete socketToGroup[k])
+    ipCreateLimits.clear()
+    ipJoinLimits.clear()
   })
 
   // ─── 1. Single user in a group ─────────────────────────────────────────────

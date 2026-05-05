@@ -19,10 +19,10 @@ function once(socket, event) {
 }
 
 // Shared server state — both suites in this file use the same instance.
-let httpServer, io, groups, socketToGroup, cleanupTimer, serverUrl
+let httpServer, io, groups, socketToGroup, cleanupTimer, ipCreateLimits, ipJoinLimits, serverUrl
 
 async function setup() {
-  ;({ httpServer, io, groups, socketToGroup, cleanupTimer } = createApp({ corsOrigin: '*' }))
+  ;({ httpServer, io, groups, socketToGroup, cleanupTimer, ipCreateLimits, ipJoinLimits } = createApp({ corsOrigin: '*' }))
   await new Promise(resolve => httpServer.listen(0, resolve))
   serverUrl = `http://localhost:${httpServer.address().port}`
 }
@@ -38,6 +38,8 @@ async function reset() {
   await new Promise(r => setTimeout(r, 100))
   Object.keys(groups).forEach(k => delete groups[k])
   Object.keys(socketToGroup).forEach(k => delete socketToGroup[k])
+  ipCreateLimits.clear()
+  ipJoinLimits.clear()
 }
 
 describe('Integration — Part 1: session, host transfer, and lifecycle', () => {

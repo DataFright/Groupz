@@ -1,5 +1,5 @@
 import { describe, it, expect, vi, beforeEach } from 'vitest'
-import { render, screen, waitFor, fireEvent } from '@testing-library/react'
+import { render, screen, waitFor, fireEvent, act } from '@testing-library/react'
 import userEvent from '@testing-library/user-event'
 import Home from '../../components/Home.jsx'
 
@@ -162,6 +162,46 @@ describe('Home', () => {
       await userEvent.type(screen.getByPlaceholderText('Enter your name'), 'Alice')
       await userEvent.click(submitBtn())
       expect(submitBtn()).toBeDisabled()
+    })
+  })
+
+  // ─── Server error responses ────────────────────────────────────────────────
+
+  describe('server error responses', () => {
+    function getJoinErrorHandler() {
+      const call = socket.on.mock.calls.find(([event]) => event === 'join-error')
+      return call?.[1]
+    }
+
+    it('displays GROUP_FULL error message when the server rejects the join', async () => {
+      render(<Home onJoin={vi.fn()} />)
+      const handler = getJoinErrorHandler()
+      await act(async () => {
+        handler({ code: 'GROUP_FULL', message: 'This group is full (max 20 members)', status: 400 })
+      })
+      await waitFor(() =>
+        expect(screen.getByText('This group is full (max 20 members)')).toBeInTheDocument()
+      )
+    })
+
+    it('displays RATE_LIMITED error message when the server rejects the join', async () => {
+      render(<Home onJoin={vi.fn()} />)
+      const handler = getJoinErrorHandler()
+      await act(async () => {
+        handler({ code: 'RATE_LIMITED', message: 'Too many join attempts. Try again later.', status: 429 })
+      })
+      await waitFor(() =>
+        expect(screen.getByText('Too many join attempts. Try again later.')).toBeInTheDocument()
+      )
+    })
+
+    it('disconnects the socket on GROUP_FULL or RATE_LIMITED error', async () => {
+      render(<Home onJoin={vi.fn()} />)
+      const handler = getJoinErrorHandler()
+      await act(async () => {
+        handler({ code: 'GROUP_FULL', message: 'This group is full (max 20 members)', status: 400 })
+      })
+      expect(socket.disconnect).toHaveBeenCalled()
     })
   })
 })

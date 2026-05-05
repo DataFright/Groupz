@@ -53,3 +53,21 @@ describe('Join group — joining flow', () => {
     cy.contains('Group not found', { timeout: 10000 }).should('be.visible')
   })
 })
+
+describe('Join group — group full', () => {
+  after(() => cy.task('releaseAllPoolSockets'))
+
+  it('shows a group full error when the group has reached max capacity (20 members)', () => {
+    cy.task('createGroupInPool', { id: 'fullHost', name: 'Host', icon: '🦊' }).then(code => {
+      // Fill to 20 members: host (1) + 19 fill sockets = 20 total
+      cy.task('fillGroupWithMembers', { code, count: 19 }).then(() => {
+        cy.visitWithGeo()
+        cy.contains('button[type="button"]', 'Join Group').click()
+        cy.get('input[placeholder="Enter 6-character code"]').type(code)
+        cy.get('input[placeholder="Enter your name"]').type('Extra')
+        cy.get('button[type="submit"]').click()
+        cy.contains('group is full', { timeout: 10000, matchCase: false }).should('be.visible')
+      })
+    })
+  })
+})

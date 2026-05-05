@@ -130,6 +130,23 @@ module.exports = defineConfig({
           socketPool = {}
           return null
         },
+
+        // Joins `count` members into an existing group in parallel, storing each
+        // socket in the pool under ids 'fill_0', 'fill_1', … 'fill_N'.
+        // Used to fill a group to capacity without slow sequential task chains.
+        fillGroupWithMembers({ code, count = 19, icon = '🐻' } = {}) {
+          const joins = Array.from({ length: count }, (_, i) =>
+            new Promise((resolve, reject) => {
+              const socket = io('http://localhost:3001', { reconnection: false })
+              const t = setTimeout(() => { socket.disconnect(); reject(new Error(`fillGroupWithMembers slot ${i} timed out`)) }, 8000)
+              socket.once('join-confirmed', () => { clearTimeout(t); socketPool[`fill_${i}`] = socket; resolve() })
+              socket.once('join-error', ({ message }) => { clearTimeout(t); socket.disconnect(); reject(new Error(`slot ${i}: ${message}`)) })
+              socket.once('connect_error', err => { clearTimeout(t); reject(err) })
+              socket.once('connect', () => socket.emit('join-group', { code, name: `Fill${i}`, icon }))
+            })
+          )
+          return Promise.all(joins).then(() => null)
+        },
       })
     },
   },

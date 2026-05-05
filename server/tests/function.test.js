@@ -38,10 +38,10 @@ async function joinGroup(client, code, name = 'Bob', icon = '🐻') {
 }
 
 describe('Function tests — socket event handlers', () => {
-  let httpServer, io, groups, socketToGroup, cleanupTimer, serverUrl
+  let httpServer, io, groups, socketToGroup, cleanupTimer, ipCreateLimits, ipJoinLimits, serverUrl
 
   beforeAll(async () => {
-    ;({ httpServer, io, groups, socketToGroup, cleanupTimer } = createApp({ corsOrigin: '*' }))
+    ;({ httpServer, io, groups, socketToGroup, cleanupTimer, ipCreateLimits, ipJoinLimits } = createApp({ corsOrigin: '*' }))
     await new Promise(resolve => httpServer.listen(0, resolve))
     serverUrl = `http://localhost:${httpServer.address().port}`
   })
@@ -57,6 +57,8 @@ describe('Function tests — socket event handlers', () => {
     await new Promise(r => setTimeout(r, 80))
     Object.keys(groups).forEach(k => delete groups[k])
     Object.keys(socketToGroup).forEach(k => delete socketToGroup[k])
+    ipCreateLimits.clear()
+    ipJoinLimits.clear()
   })
 
   // ─── create-group ──────────────────────────────────────────────────────────
@@ -417,5 +419,136 @@ describe('Function tests — socket event handlers', () => {
       const body = await res.json()
       expect(body.activeGroups).toBe(1)
     })
+  })
+})
+
+// ─── Group size limit ──────────────────────────────────────────────────────────
+
+describe('Group size limit', () => {
+  let httpServer, io, groups, socketToGroup, cleanupTimer, serverUrl
+
+  beforeAll(async () => {
+    ;({ httpServer, io, groups, socketToGroup, cleanupTimer } = createApp({
+      corsOrigin: '*',
+      maxGroupSize: 2,
+    }))
+    await new Promise(resolve => httpServer.listen(0, resolve))
+    serverUrl = `http://localhost:${httpServer.address().port}`
+  })
+
+  afterAll(async () => {
+    clearInterval(cleanupTimer)
+    await new Promise(resolve => io.close(resolve))
+    await new Promise(resolve => httpServer.close(resolve))
+  })
+
+  afterEach(async () => {
+    io.disconnectSockets(true)
+    await new Promise(r => setTimeout(r, 80))
+    Object.keys(groups).forEach(k => delete groups[k])
+    Object.keys(socketToGroup).forEach(k => delete socketToGroup[k])
+  })
+
+  it('emits join-error GROUP_FULL when the group is at capacity', async () => {
+    const host = await connect(serverUrl)
+    const { code } = await createGroup(host)
+
+    const member = await connect(serverUrl)
+    await joinGroup(member, code)  // fills the group (maxGroupSize: 2)
+
+    const extra = await connect(serverUrl)
+    const p = once(extra, 'join-error')
+    extra.emit('join-group', { code, name: 'Extra', icon: '🦁' })
+    const err = await p
+    expect(err.code).toBe(ErrorCode.GROUP_FULL)
+    expect(err.status).toBe(400)
+  })
+
+  it('does not add a member to a full group', async () => {
+    const host = await connect(serverUrl)
+    const { code } = await createGroup(host)
+
+    const member = await connect(serverUrl)
+    await joinGroup(member, code)
+
+    const extra = await connect(serverUrl)
+    extra.emit('join-group', { code, name: 'Extra', icon: '🦁' })
+    await new Promise(r => setTimeout(r, 100))
+    expect(Object.keys(groups[code].members)).toHaveLength(2)
+  })
+})
+
+// ─── IP rate limiting ──────────────────────────────────────────────────────────
+
+describe('IP rate limiting', () => {
+  let httpServer, io, groups, socketToGroup, cleanupTimer, ipCreateLimits, ipJoinLimits, serverUrl
+
+  beforeAll(async () => {
+    ;({ httpServer, io, groups, socketToGroup, cleanupTimer, ipCreateLimits, ipJoinLimits } = createApp({
+      corsOrigin: '*',
+      ipRateLimits: {
+        createGroup: { max: 2, windowMs: 60_000 },
+        joinGroup:   { max: 2, windowMs: 60_000 },
+      },
+    }))
+    await new Promise(resolve => httpServer.listen(0, resolve))
+    serverUrl = `http://localhost:${httpServer.address().port}`
+  })
+
+  afterAll(async () => {
+    clearInterval(cleanupTimer)
+    await new Promise(resolve => io.close(resolve))
+    await new Promise(resolve => httpServer.close(resolve))
+  })
+
+  afterEach(async () => {
+    io.disconnectSockets(true)
+    await new Promise(r => setTimeout(r, 80))
+    Object.keys(groups).forEach(k => delete groups[k])
+    Object.keys(socketToGroup).forEach(k => delete socketToGroup[k])
+    ipCreateLimits.clear()
+    ipJoinLimits.clear()
+  })
+
+  it('emits join-error RATE_LIMITED after exceeding the create-group limit', async () => {
+    const c1 = await connect(serverUrl)
+    const c2 = await connect(serverUrl)
+    const c3 = await connect(serverUrl)
+    await createGroup(c1)
+    await createGroup(c2)
+    const p = once(c3, 'join-error')
+    c3.emit('create-group', { name: 'Alice', icon: '🦊' })
+    const err = await p
+    expect(err.code).toBe(ErrorCode.RATE_LIMITED)
+    expect(err.status).toBe(429)
+  })
+
+  it('does not create a group when the create-group rate limit is exceeded', async () => {
+    const c1 = await connect(serverUrl)
+    const c2 = await connect(serverUrl)
+    const c3 = await connect(serverUrl)
+    await createGroup(c1)
+    await createGroup(c2)
+    c3.emit('create-group', { name: 'Alice', icon: '🦊' })
+    await new Promise(r => setTimeout(r, 100))
+    expect(Object.keys(groups)).toHaveLength(2)
+  })
+
+  it('emits join-error RATE_LIMITED after exceeding the join-group limit', async () => {
+    const host = await connect(serverUrl)
+    const { code } = await createGroup(host)
+
+    // Do one real join to seed the Map with the actual loopback IP key,
+    // then manually fill the counter to max so the next attempt is blocked.
+    const j1 = await connect(serverUrl)
+    await joinGroup(j1, code)
+    for (const entry of ipJoinLimits.values()) entry.count = 2  // max = 2
+
+    const j2 = await connect(serverUrl)
+    const p = once(j2, 'join-error')
+    j2.emit('join-group', { code, name: 'Carol', icon: '🐱' })
+    const err = await p
+    expect(err.code).toBe(ErrorCode.RATE_LIMITED)
+    expect(err.status).toBe(429)
   })
 })
