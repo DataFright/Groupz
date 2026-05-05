@@ -7,7 +7,8 @@
     "dev": "node --watch server.js",
     "test": "vitest run",
     "test:watch": "vitest",
-    "test:docker": "node scripts/docker-smoke.js"
+    "test:docker": "node scripts/docker-smoke.js",
+    "test:load": "node scripts/load-test.js"
   },
   "dependencies": {
     "cors": "^2.8.5",
