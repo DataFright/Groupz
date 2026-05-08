@@ -59,16 +59,19 @@ jobs:
 
       - name: Run Cypress against production
         id: cypress
-        run: |
-          npx cypress run \
-            --browser chrome --headless \
-            --config "baseUrl=https://groupz-seven.vercel.app,screenshotOnRunFailure=true,video=false,defaultCommandTimeout=15000" \
-            --reporter mochawesome \
+        uses: cypress-io/github-action@v6
+        with:
+          working-directory: client
+          install: false
+          command: >
+            npx cypress run
+            --browser chrome
+            --config "baseUrl=https://groupz-seven.vercel.app,screenshotOnRunFailure=true,video=false,defaultCommandTimeout=15000"
+            --reporter mochawesome
             --reporter-options "reportDir=cypress/reports,overwrite=false,html=false,json=true"
-        working-directory: client
-        continue-on-error: true
         env:
           CYPRESS_BACKEND_URL: https://groupz-j717.onrender.com
+        continue-on-error: true
 
       - name: Generate HTML report
         if: always()
@@ -89,6 +92,7 @@ jobs:
         with:
           name: cypress-report
           path: client/cypress/reports/report.html
+          if-no-files-found: warn
 
       - name: Upload failure screenshots
         uses: actions/upload-artifact@v4
@@ -96,6 +100,7 @@ jobs:
         with:
           name: cypress-screenshots
           path: client/cypress/screenshots/
+          if-no-files-found: warn
 
       # Revert the bad commit so Render + Vercel automatically re-deploy the
       # previous working version. Pushes via GITHUB_TOKEN do not re-trigger
