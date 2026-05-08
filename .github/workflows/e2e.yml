@@ -53,46 +53,16 @@ jobs:
         run: npm ci
         working-directory: client
 
-      - name: Install report tools
-        run: npm install --no-save mochawesome mochawesome-merge mochawesome-report-generator
-        working-directory: client
-
       - name: Run Cypress against production
         id: cypress
         uses: cypress-io/github-action@v6
         with:
           working-directory: client
           install: false
-          command: >
-            npx cypress run
-            --browser chrome
-            --config "baseUrl=https://groupz-seven.vercel.app,screenshotOnRunFailure=true,video=false,defaultCommandTimeout=15000"
-            --reporter mochawesome
-            --reporter-options "reportDir=cypress/reports,overwrite=false,html=false,json=true"
+          config: baseUrl=https://groupz-seven.vercel.app,screenshotOnRunFailure=true,video=false,defaultCommandTimeout=15000
         env:
           CYPRESS_BACKEND_URL: https://groupz-j717.onrender.com
         continue-on-error: true
-
-      - name: Generate HTML report
-        if: always()
-        run: |
-          shopt -s nullglob
-          files=(cypress/reports/mochawesome*.json)
-          if [ ${#files[@]} -eq 0 ]; then
-            echo "No mochawesome JSON files found — Cypress did not produce output"
-            exit 0
-          fi
-          npx mochawesome-merge "${files[@]}" -o cypress/reports/report.json
-          npx marge cypress/reports/report.json --reportDir cypress/reports --inline
-        working-directory: client
-
-      - name: Upload HTML report
-        uses: actions/upload-artifact@v4
-        if: always()
-        with:
-          name: cypress-report
-          path: client/cypress/reports/report.html
-          if-no-files-found: warn
 
       - name: Upload failure screenshots
         uses: actions/upload-artifact@v4
