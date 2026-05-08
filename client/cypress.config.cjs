@@ -26,13 +26,6 @@ module.exports = defineConfig({
     video: false,
     screenshotOnRunFailure: true,
     defaultCommandTimeout: 8000,
-    reporter: 'mochawesome',
-    reporterOptions: {
-      reportDir: 'cypress/results',
-      overwrite: false,
-      html: false,
-      json: true,
-    },
 
     setupNodeEvents(on) {
       on('task', {

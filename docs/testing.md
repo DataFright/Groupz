@@ -71,12 +71,12 @@ The reporter is configured in `cypress.config.cjs`. Every run — local or CI �
 ```bash
 # Merge and generate manually after a local run
 cd client
-npx mochawesome-merge cypress/results/*.json > cypress/results/combined.json
-npx marge cypress/results/combined.json --reportDir cypress/results --inline
-# open cypress/results/combined.html
+npx mochawesome-merge 'cypress/reports/mochawesome*.json' -o cypress/reports/report.json
+npx marge cypress/reports/report.json --reportDir cypress/reports --inline
+# open cypress/reports/report.html
 ```
 
-`client/cypress/results/` is gitignored — reports are CI artifacts only.
+`client/cypress/reports/` is gitignored — reports are CI artifacts only.
 
 ## Cypress task infrastructure
 
