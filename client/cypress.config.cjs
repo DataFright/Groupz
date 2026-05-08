@@ -1,6 +1,8 @@
 const { defineConfig } = require('cypress')
 const { io } = require('socket.io-client')
 
+const BACKEND_URL = process.env.CYPRESS_BACKEND_URL || 'http://localhost:3001'
+
 // Module-level socket kept alive for the duration of a test suite when
 // createGroupAndHold is used. Released by the releaseGroupSocket task.
 let heldSocket = null
@@ -31,7 +33,7 @@ module.exports = defineConfig({
         // Returns the 6-char group code.
         createGroup({ name = 'Task Host', icon = '🦊' } = {}) {
           return new Promise((resolve, reject) => {
-            const socket = io('http://localhost:3001', { reconnection: false })
+            const socket = io(BACKEND_URL, { reconnection: false })
             const t = setTimeout(() => { socket.disconnect(); reject(new Error('createGroup timed out')) }, 8000)
             socket.once('group-created', ({ code }) => { clearTimeout(t); socket.disconnect(); resolve(code) })
             socket.once('connect_error', err => { clearTimeout(t); reject(err) })
@@ -43,7 +45,7 @@ module.exports = defineConfig({
         // as a non-host. Call releaseGroupSocket in afterEach / after to clean up.
         createGroupAndHold({ name = 'Task Host', icon = '🦊' } = {}) {
           return new Promise((resolve, reject) => {
-            heldSocket = io('http://localhost:3001', { reconnection: false })
+            heldSocket = io(BACKEND_URL, { reconnection: false })
             const t = setTimeout(() => { heldSocket?.disconnect(); heldSocket = null; reject(new Error('createGroupAndHold timed out')) }, 8000)
             heldSocket.once('group-created', ({ code }) => { clearTimeout(t); resolve(code) })
             heldSocket.once('connect_error', err => { clearTimeout(t); reject(err) })
@@ -64,7 +66,7 @@ module.exports = defineConfig({
         // Returns the joined member's socketId.
         joinGroupAndHold({ code, name = 'Task Member', icon = '🐸', lat = null, lng = null } = {}) {
           return new Promise((resolve, reject) => {
-            heldJoinSocket = io('http://localhost:3001', { reconnection: false })
+            heldJoinSocket = io(BACKEND_URL, { reconnection: false })
             const t = setTimeout(() => { heldJoinSocket?.disconnect(); heldJoinSocket = null; reject(new Error('joinGroupAndHold timed out')) }, 8000)
             heldJoinSocket.once('join-confirmed', ({ socketId }) => {
               clearTimeout(t)
@@ -90,7 +92,7 @@ module.exports = defineConfig({
         // and resolves with the 6-char group code.
         createGroupInPool({ id, name = 'Task Host', icon = '🦊' } = {}) {
           return new Promise((resolve, reject) => {
-            const socket = io('http://localhost:3001', { reconnection: false })
+            const socket = io(BACKEND_URL, { reconnection: false })
             const t = setTimeout(() => { socket.disconnect(); reject(new Error('createGroupInPool timed out')) }, 8000)
             socket.once('group-created', ({ code }) => { clearTimeout(t); socketPool[id] = socket; resolve(code) })
             socket.once('connect_error', err => { clearTimeout(t); reject(err) })
@@ -103,7 +105,7 @@ module.exports = defineConfig({
         // Pass lat/lng to immediately emit a location-update after joining.
         joinGroupInPool({ id, code, name = 'Task Member', icon = '🐸', lat = null, lng = null } = {}) {
           return new Promise((resolve, reject) => {
-            const socket = io('http://localhost:3001', { reconnection: false })
+            const socket = io(BACKEND_URL, { reconnection: false })
             const t = setTimeout(() => { socket.disconnect(); reject(new Error('joinGroupInPool timed out')) }, 8000)
             socket.once('join-confirmed', ({ socketId }) => {
               clearTimeout(t)
@@ -137,7 +139,7 @@ module.exports = defineConfig({
         fillGroupWithMembers({ code, count = 19, icon = '🐻' } = {}) {
           const joins = Array.from({ length: count }, (_, i) =>
             new Promise((resolve, reject) => {
-              const socket = io('http://localhost:3001', { reconnection: false })
+              const socket = io(BACKEND_URL, { reconnection: false })
               const t = setTimeout(() => { socket.disconnect(); reject(new Error(`fillGroupWithMembers slot ${i} timed out`)) }, 8000)
               socket.once('join-confirmed', () => { clearTimeout(t); socketPool[`fill_${i}`] = socket; resolve() })
               socket.once('join-error', ({ message }) => { clearTimeout(t); socket.disconnect(); reject(new Error(`slot ${i}: ${message}`)) })

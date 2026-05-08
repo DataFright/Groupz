@@ -8,7 +8,8 @@
     "test": "vitest run",
     "test:watch": "vitest",
     "test:docker": "node scripts/docker-smoke.js",
-    "test:load": "node scripts/load-test.js"
+    "test:load": "node scripts/load-test.js",
+    "lint": "eslint src/ scripts/"
   },
   "dependencies": {
     "cors": "^2.8.5",
@@ -17,6 +18,9 @@
     "socket.io": "^4.7.5"
   },
   "devDependencies": {
+    "@eslint/js": "^9.39.4",
+    "eslint": "^9.39.4",
+    "globals": "^17.6.0",
     "socket.io-client": "^4.7.5",
     "vitest": "^2.0.0"
   }

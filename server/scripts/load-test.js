@@ -125,7 +125,7 @@ async function setup() {
 }
 
 // ── Phase 2: Sustained load ───────────────────────────────────────────────────
-async function runLoad(groups, allSockets) {
+async function runLoad(groups) {
   let sent = 0
   let received = 0
   let errors = 0
@@ -219,7 +219,7 @@ async function main() {
 
   const { groups, allSockets } = await setup()
 
-  const results = await runLoad(groups, allSockets)
+  const results = await runLoad(groups)
 
   console.log('Disconnecting all sockets…')
   allSockets.forEach(s => s.disconnect())
