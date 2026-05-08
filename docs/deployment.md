@@ -102,6 +102,37 @@ Checks: health endpoint, socket connects, `create-group` returns a 6-char code, 
 
 ---
 
+## CI/CD
+
+Two GitHub Actions workflows live in `.github/workflows/`.
+
+### CI (`ci.yml`) — runs on every push to `main`
+
+Steps: install → lint → server tests (113) → client tests (43) → production build. Publishes a JUnit test report as a GitHub Check via `dorny/test-reporter`.
+
+### E2E (`e2e.yml`) — runs after CI passes
+
+1. **Wait for Render deploy** — polls the Render API (up to 10 min) until the new commit is live on the backend
+2. **Install client deps** — `npm ci` (includes mochawesome)
+3. **Run Cypress** — 75 specs in Chrome headless against the live production URLs
+4. **Merge + generate HTML report** — mochawesome JSON files are merged and converted to `combined.html`
+5. **Upload report artifact** — `cypress-report` artifact available on every run (pass or fail)
+6. **Upload failure screenshots** — `cypress-screenshots` artifact uploaded only on failure
+7. **Rollback on failure** — `git revert HEAD` is pushed to `main`, triggering Render + Vercel to auto-redeploy the previous working version. Pushes via `GITHUB_TOKEN` do not re-trigger Actions, so there's no infinite loop.
+
+### Required GitHub secrets
+
+| Secret | Where to get it |
+|---|---|
+| `RENDER_API_KEY` | Render dashboard → Account Settings → API Keys |
+| `RENDER_SERVICE_ID` | The `srv-xxxxx` ID from your Render service URL |
+
+### Render free-tier note
+
+The Render free tier spins down after inactivity. The `00-warmup.cy.js` spec runs first and submits a create-group request with a generous timeout to absorb the cold start (up to ~60 s), then waits 30 s before the main suite begins.
+
+---
+
 ## Backend has no persistent storage
 
 Restarting the server clears all active groups. Members will be disconnected and need to create or rejoin a group. This is by design — Groupz is a session-based tool, not a persistent service.

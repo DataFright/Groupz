@@ -64,6 +64,24 @@ jobs:
           CYPRESS_BACKEND_URL: https://groupz-j717.onrender.com
         continue-on-error: true
 
+      - name: Merge mochawesome reports
+        if: always()
+        run: npx mochawesome-merge cypress/results/*.json > cypress/results/combined.json
+        working-directory: client
+
+      - name: Generate HTML report
+        if: always()
+        run: npx marge cypress/results/combined.json --reportDir cypress/results --inline
+        working-directory: client
+
+      - name: Upload HTML report
+        uses: actions/upload-artifact@v4
+        if: always()
+        with:
+          name: cypress-report
+          path: client/cypress/results/combined.html
+          if-no-files-found: warn
+
       - name: Upload failure screenshots
         uses: actions/upload-artifact@v4
         if: always() && steps.cypress.outcome == 'failure'

@@ -36,5 +36,8 @@ coverage/
 **/coverage/
 .nyc_output/
 
+# Cypress generated reports (uploaded as CI artifacts, not committed)
+client/cypress/results/
+
 # Claude Code
 CLAUDE.md

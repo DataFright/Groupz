@@ -34,17 +34,21 @@ cd client && npm test
 | `unit/IconPicker.test.jsx` | Icon grid renders, selection state, onChange callback |
 | `integration/AppFlow.test.jsx` | Mocked socket flow: create group, join group, error handling |
 
-## 3. End-to-end — Cypress 13 in Chrome (74 tests)
+## 3. End-to-end — Cypress 13 in Chrome (75 tests)
 
 Located in `client/cypress/e2e/`. Requires both servers running. Uses Chrome headless.
 
 ```bash
 cd client && npm run e2e       # headless (CI)
 cd client && npm run cy:open   # interactive
+
+# Against production (validate before pushing)
+cd client && CYPRESS_BACKEND_URL=https://groupz-j717.onrender.com npx cypress run --config baseUrl=https://groupz-seven.vercel.app
 ```
 
 | Spec | Tests | What it covers |
 |---|---|---|
+| `00-warmup.cy.js` | 1 | Wakes the Render free-tier backend before any other spec runs; handles both cold-start (connection error) and warm paths; waits 30 s either way |
 | `home.cy.js` | 7 | Title, subtitle, tabs, name and code inputs, icon picker display |
 | `tabs-and-validation.cy.js` | 7 | Tab switching, code auto-uppercase, submit label changes, client-side validation errors |
 | `validation-edge-cases.cy.js` | 3 | Whitespace-only name rejected, `maxlength` on name (16) and code (6) inputs |
@@ -59,6 +63,20 @@ cd client && npm run cy:open   # interactive
 | `geo-error.cy.js` | 4 | Banner appears when geolocation denied, includes browser error message, dismissed by ✕ button, absent when geolocation succeeds |
 | `recenter-button.cy.js` | 3 | 🎯 FAB is visible, clicking leaves map intact, clicking before first GPS fix resolves silently |
 | `scenarios.cy.js` | 11 | Four real-world group shapes at the UI layer: single user, multiple users, multiple groups one user each, multiple groups multiple users each |
+
+## Cypress HTML reports (mochawesome)
+
+The reporter is configured in `cypress.config.cjs`. Every run — local or CI — generates one JSON file per spec in `cypress/results/`. In CI these are merged into a single `combined.html` and uploaded as the `cypress-report` artifact on the GitHub Actions run.
+
+```bash
+# Merge and generate manually after a local run
+cd client
+npx mochawesome-merge cypress/results/*.json > cypress/results/combined.json
+npx marge cypress/results/combined.json --reportDir cypress/results --inline
+# open cypress/results/combined.html
+```
+
+`client/cypress/results/` is gitignored — reports are CI artifacts only.
 
 ## Cypress task infrastructure
 

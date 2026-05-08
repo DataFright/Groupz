@@ -45,8 +45,8 @@ Leave `VITE_SOCKET_URL` empty in `client/.env` — the Vite dev server proxies s
 |---|---|
 | [Architecture](docs/architecture.md) | System design, group lifecycle, state shape, server limits |
 | [Protocol](docs/protocol.md) | Socket events, error codes, REST endpoints, member object shape |
-| [Testing](docs/testing.md) | Server Vitest (113), Client Vitest (43), Cypress e2e (74), task infrastructure |
-| [Deployment](docs/deployment.md) | Render + Vercel setup, Docker, environment variables, common gotchas |
+| [Testing](docs/testing.md) | Server Vitest (113), Client Vitest (43), Cypress e2e (75), task infrastructure, mochawesome reports |
+| [Deployment](docs/deployment.md) | Render + Vercel setup, Docker, environment variables, CI/CD workflows, common gotchas |
 | [Benchmarks](docs/benchmarks.md) | Load test results, estimated capacity by tier, scaling path |
 
 ---
@@ -69,5 +69,5 @@ Groupz/
     │   ├── tests/          # smoke, unit, integration
     │   └── App.jsx
     └── cypress/
-        └── e2e/            # 14 spec files
+        └── e2e/            # 15 spec files
 ```
