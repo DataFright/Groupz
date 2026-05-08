@@ -85,25 +85,16 @@ jobs:
 
       - name: Upload failure screenshots
         uses: actions/upload-artifact@v4
-        if: steps.cypress.outcome == 'failure'
+        if: always() && steps.cypress.outcome == 'failure'
         with:
           name: cypress-screenshots
           path: client/cypress/screenshots/
-
-      - name: Publish E2E test report
-        uses: dorny/test-reporter@v1
-        if: always()
-        with:
-          name: E2E Tests
-          path: 'client/cypress/reports/mochawesome*.json'
-          reporter: mochawesome
-          fail-on-error: false
 
       # Revert the bad commit so Render + Vercel automatically re-deploy the
       # previous working version. Pushes via GITHUB_TOKEN do not re-trigger
       # GitHub Actions workflows, preventing an infinite loop.
       - name: Rollback on E2E failure
-        if: steps.cypress.outcome == 'failure'
+        if: always() && steps.cypress.outcome == 'failure'
         run: |
           git config user.email "github-actions@github.com"
           git config user.name "GitHub Actions"
@@ -111,7 +102,7 @@ jobs:
           git push origin main
 
       - name: Fail job after rollback
-        if: steps.cypress.outcome == 'failure'
+        if: always() && steps.cypress.outcome == 'failure'
         run: |
           echo "E2E tests failed — rollback pushed to main"
           exit 1
