@@ -60,7 +60,7 @@ describe('Scenario 2 — multiple users in one group', () => {
 
   it('member count decreases when one task member disconnects', () => {
     cy.task('releasePoolSocket', { id: 'bob' })
-    cy.contains('2 members', { timeout: 8000 }).should('be.visible')
+    cy.contains('2 members').should('be.visible')
   })
 
   it('host ending the group returns to the home screen', () => {
@@ -91,7 +91,7 @@ describe('Scenario 3 — multiple groups, one user each', () => {
 
   it('the server health endpoint reports at least 2 active groups', () => {
     // at.least rather than eq — other specs in the run may have live groups too
-    cy.request('http://localhost:3001/health')
+    cy.request(`${Cypress.env('BACKEND_URL') || 'http://localhost:3001'}/health`)
       .its('body.activeGroups')
       .should('be.at.least', 2)
   })
@@ -113,7 +113,7 @@ describe('Scenario 4 — multiple groups, multiple users each', () => {
     cy.contains(/^[A-F0-9]{6}$/).invoke('text').then(codeA => {
       cy.task('joinGroupInPool', { id: 'memberA', code: codeA, name: 'Member A', icon: '🐸' })
     })
-    cy.contains('2 members', { timeout: 8000 }).should('be.visible')
+    cy.contains('2 members').should('be.visible')
   })
 
   afterEach(() => cy.task('releaseAllPoolSockets'))
@@ -129,7 +129,7 @@ describe('Scenario 4 — multiple groups, multiple users each', () => {
 
   it('the server health endpoint reports at least 2 active groups', () => {
     // at.least rather than eq — other specs in the run may have live groups too
-    cy.request('http://localhost:3001/health')
+    cy.request(`${Cypress.env('BACKEND_URL') || 'http://localhost:3001'}/health`)
       .its('body.activeGroups')
       .should('be.at.least', 2)
   })

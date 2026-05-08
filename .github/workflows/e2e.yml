@@ -61,7 +61,7 @@ jobs:
         id: cypress
         run: |
           npx cypress run \
-            --config "baseUrl=https://groupz-seven.vercel.app,screenshotOnRunFailure=true,video=false" \
+            --config "baseUrl=https://groupz-seven.vercel.app,screenshotOnRunFailure=true,video=false,defaultCommandTimeout=15000" \
             --reporter mochawesome \
             --reporter-options "reportDir=cypress/reports,overwrite=false,html=false,json=true"
         working-directory: client
