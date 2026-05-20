@@ -76,6 +76,7 @@ jobs:
         id: cypress
         run: |
           npx cypress run \
+            --browser chrome \
             --config "baseUrl=https://groupz-seven.vercel.app,screenshotOnRunFailure=true,video=false" \
             --reporter mochawesome \
             --reporter-options "reportDir=cypress/reports,overwrite=false,html=false,json=true"
@@ -115,19 +116,22 @@ jobs:
           reporter: mochawesome
           fail-on-error: false
 
-      # Revert the bad commit so Render + Vercel automatically re-deploy the
-      # previous working version. Pushes via GITHUB_TOKEN do not re-trigger
-      # GitHub Actions workflows, preventing an infinite loop.
-      - name: Rollback on E2E failure
-        if: steps.cypress.outcome == 'failure'
-        run: |
-          git config user.email "github-actions@github.com"
-          git config user.name "GitHub Actions"
-          git revert HEAD --no-edit
-          git push origin main
+      # Rollback intentionally disabled.
+      # When active, each E2E failure pushed a revert commit to main, causing
+      # Render to deploy a new SHA. The "Wait for Render deploy" step then timed
+      # out looking for the original SHA, so Cypress never ran, triggering
+      # another rollback — an infinite loop. Re-enable only after confirming
+      # the Render SHA-match logic handles rollback commits gracefully.
+      # - name: Rollback on E2E failure
+      #   if: steps.cypress.outcome == 'failure'
+      #   run: |
+      #     git config user.email "github-actions@github.com"
+      #     git config user.name "GitHub Actions"
+      #     git revert HEAD --no-edit
+      #     git push origin main
 
-      - name: Fail job after rollback
+      - name: Fail job if Cypress failed
         if: steps.cypress.outcome == 'failure'
         run: |
-          echo "E2E tests failed — rollback pushed to main"
+          echo "E2E tests failed"
           exit 1
