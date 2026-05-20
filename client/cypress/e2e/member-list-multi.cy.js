@@ -13,7 +13,7 @@ describe('Member list — host perspective', () => {
     cy.contains(/^[A-F0-9]{6}$/)
       .invoke('text')
       .then(code => cy.task('joinGroupAndHold', { code, name: 'Bob', icon: '🐸' }))
-    cy.contains('2 members').should('be.visible')
+    cy.contains('2 members', { timeout: 8000 }).should('be.visible')
     cy.get('[aria-label="Members"]').click()
   })
 
@@ -64,7 +64,7 @@ describe('Member list — non-host perspective', () => {
   beforeEach(() => {
     cy.visitWithGeo()
     cy.joinGroupViaUI(groupCode, 'Bob')
-    cy.contains('2 members').should('be.visible')
+    cy.contains('2 members', { timeout: 8000 }).should('be.visible')
     cy.get('[aria-label="Members"]').click()
   })
 

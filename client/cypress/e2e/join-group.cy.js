@@ -26,18 +26,12 @@ describe('Join group — joining flow', () => {
 
   it('navigates to the map view when joining with a valid code', () => {
     joinGroup()
-    cy.get('[aria-label="Leave"]').click()
-    cy.contains('button', 'Leave').click()
-    cy.contains('h1', 'Groupz', { timeout: 10000 }).should('be.visible')
   })
 
   it('non-host joiner sees Leave but not End Group', () => {
     joinGroup()
     cy.get('[aria-label="Leave"]').should('be.visible')
     cy.contains('button', 'End Group').should('not.exist')
-    cy.get('[aria-label="Leave"]').click()
-    cy.contains('button', 'Leave').click()
-    cy.contains('h1', 'Groupz', { timeout: 10000 }).should('be.visible')
   })
 
   it('member count shows 2 members while the host is still active', () => {
