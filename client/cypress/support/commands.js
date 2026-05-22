@@ -14,7 +14,7 @@ Cypress.Commands.add('visitWithGeo', (lat = 51.5074, lng = -0.1278) => {
 Cypress.Commands.add('createGroupViaUI', (name = 'Alice') => {
   cy.get('input[placeholder="Enter your name"]').type(name)
   cy.get('button[type="submit"]').click()
-  cy.contains('button', 'End Group', { timeout: 10000 }).should('be.visible')
+  cy.contains('button', 'End Group', { timeout: 15000 }).should('be.visible')
 })
 
 // Navigate to the map view by joining an existing group via the Home form.

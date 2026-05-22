@@ -91,7 +91,7 @@ describe('Scenario 3 — multiple groups, one user each', () => {
 
   it('the server health endpoint reports at least 2 active groups', () => {
     // at.least rather than eq — other specs in the run may have live groups too
-    cy.request('http://localhost:3001/health')
+    cy.request(`${Cypress.env('BACKEND_URL') || 'http://localhost:3001'}/health`)
       .its('body.activeGroups')
       .should('be.at.least', 2)
   })
@@ -129,7 +129,7 @@ describe('Scenario 4 — multiple groups, multiple users each', () => {
 
   it('the server health endpoint reports at least 2 active groups', () => {
     // at.least rather than eq — other specs in the run may have live groups too
-    cy.request('http://localhost:3001/health')
+    cy.request(`${Cypress.env('BACKEND_URL') || 'http://localhost:3001'}/health`)
       .its('body.activeGroups')
       .should('be.at.least', 2)
   })

@@ -38,3 +38,7 @@ coverage/
 
 # Claude Code
 CLAUDE.md
+
+# Cypress test output
+cypress-results.txt
+client/cypress/screenshots/

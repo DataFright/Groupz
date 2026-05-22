@@ -110,22 +110,13 @@ function SetMapRef({ onMap }) {
   return null
 }
 
-export default function GroupMap({ groupInfo, onLeave }) {
-  const [members, setMembers] = useState([])
+export default function GroupMap({ groupInfo, members, onLeave }) {
   const [showMembers, setShowMembers] = useState(false)
   const [showEndConfirm, setShowEndConfirm] = useState(false)
   const [showLeaveConfirm, setShowLeaveConfirm] = useState(false)
   const [geoError, setGeoError] = useState(null)
   const flyToMeRef = useRef(null)
   const { code, mySocketId, isHost, hostSocketId } = groupInfo
-
-  useEffect(() => {
-    function onMembersUpdate(list) {
-      setMembers(list)
-    }
-    socket.on('members-update', onMembersUpdate)
-    return () => socket.off('members-update', onMembersUpdate)
-  }, [])
 
   function handleLeaveClick() {
     setShowLeaveConfirm(true)

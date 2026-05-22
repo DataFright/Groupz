@@ -6,12 +6,18 @@ import GroupMap from './components/GroupMap.jsx'
 export default function App() {
   const [view, setView] = useState('home')
   const [groupInfo, setGroupInfo] = useState(null)
+  const [members, setMembers] = useState([])
   const [notification, setNotification] = useState('')
 
   useEffect(() => {
+    function onMembersUpdate(list) {
+      setMembers(list)
+    }
+
     function onRemovedFromGroup() {
       setView('home')
       setGroupInfo(null)
+      setMembers([])
       socket.disconnect()
       setNotification('You were removed from the group by the host.')
     }
@@ -19,6 +25,7 @@ export default function App() {
     function onGroupEnded() {
       setView('home')
       setGroupInfo(null)
+      setMembers([])
       socket.disconnect()
       setNotification('The group was ended by the host.')
     }
@@ -26,6 +33,7 @@ export default function App() {
     function onLeftGroup() {
       setView('home')
       setGroupInfo(null)
+      setMembers([])
       socket.disconnect()
     }
 
@@ -42,10 +50,12 @@ export default function App() {
       if (reason !== 'io client disconnect') {
         setView('home')
         setGroupInfo(null)
+        setMembers([])
         setNotification('Connection lost. Please check your network and try again.')
       }
     }
 
+    socket.on('members-update', onMembersUpdate)
     socket.on('removed-from-group', onRemovedFromGroup)
     socket.on('group-ended', onGroupEnded)
     socket.on('left-group', onLeftGroup)
@@ -53,6 +63,7 @@ export default function App() {
     socket.on('disconnect', onDisconnect)
 
     return () => {
+      socket.off('members-update', onMembersUpdate)
       socket.off('removed-from-group', onRemovedFromGroup)
       socket.off('group-ended', onGroupEnded)
       socket.off('left-group', onLeftGroup)
@@ -87,7 +98,7 @@ export default function App() {
       )}
       {view === 'home'
         ? <Home onJoin={handleJoin} />
-        : <GroupMap groupInfo={groupInfo} onLeave={handleLeave} />
+        : <GroupMap groupInfo={groupInfo} members={members} onLeave={handleLeave} />
       }
     </>
   )
