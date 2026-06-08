@@ -4,6 +4,7 @@ import { Server } from 'socket.io'
 import cors from 'cors'
 import { validateInput, generateCode, buildMemberList } from './helpers.js'
 import { ErrorCode, makeError } from './errorCodes.js'
+import { sessionStart, sessionAction, sessionGps, sessionEnd, getSummary } from './metrics.js'
 
 export function createApp({
   corsOrigin = 'http://localhost:3000',
@@ -74,6 +75,12 @@ export function createApp({
     })
   })
 
+  app.get('/api/metrics', (req, res) => {
+    const key = process.env.METRICS_KEY
+    if (key && req.query.key !== key) return res.status(401).json({ error: 'Unauthorized' })
+    res.json(getSummary())
+  })
+
   // --- Inactivity cleanup (every 60s) ---
 
   const cleanupTimer = setInterval(() => {
@@ -141,6 +148,7 @@ export function createApp({
   // --- Socket.IO ---
 
   io.on('connection', (socket) => {
+    sessionStart(socket)
 
     socket.on('create-group', ({ name, icon } = {}) => {
       if (!checkRateLimit(ipCreateLimits, getIp(socket), rlCreate))
@@ -176,6 +184,7 @@ export function createApp({
 
       socket.emit('group-created', { code, socketId: socket.id, status: 201 })
       io.to(code).emit('members-update', buildMemberList(groups[code]))
+      sessionAction(socket.id, 'create', { code, name: name.trim(), icon })
     })
 
     socket.on('join-group', ({ code: rawCode, name, icon } = {}) => {
@@ -215,6 +224,7 @@ export function createApp({
 
       socket.emit('join-confirmed', { code, socketId: socket.id, hostSocketId: group.hostSocketId, status: 200 })
       io.to(code).emit('members-update', buildMemberList(group))
+      sessionAction(socket.id, 'join', { code, name: name.trim(), icon })
     })
 
     socket.on('location-update', ({ lat, lng } = {}) => {
@@ -241,6 +251,7 @@ export function createApp({
       member.lastLocationSeen = now
       member.active = true
       group.lastActivity = now
+      sessionGps(socket.id)
 
       io.to(code).emit('members-update', buildMemberList(group))
     })
@@ -280,7 +291,7 @@ export function createApp({
       delete groups[code]
     })
 
-    socket.on('disconnect', () => handleLeave(socket, true))
+    socket.on('disconnect', () => { sessionEnd(socket.id); handleLeave(socket, true) })
   })
 
   function handleLeave(socket, isDisconnect) {
