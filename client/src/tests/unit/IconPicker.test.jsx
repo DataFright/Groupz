@@ -1,6 +1,7 @@
 import { describe, it, expect, vi } from 'vitest'
 import { render, screen, fireEvent } from '@testing-library/react'
-import IconPicker, { ICONS } from '../../components/IconPicker.jsx'
+import IconPicker from '../../components/IconPicker.jsx'
+import { ICONS } from '../../constants/icons.js'
 
 describe('Unit tests — IconPicker', () => {
   it('renders exactly 20 icon buttons', () => {

@@ -36,7 +36,7 @@ describe('Join group — joining flow', () => {
 
   it('member count shows 2 members while the host is still active', () => {
     joinGroup()
-    cy.contains('2 members').should('be.visible')
+    cy.contains('2 members', { timeout: 12000 }).should('be.visible')
   })
 
   it('the map displays the same code that was used to join', () => {

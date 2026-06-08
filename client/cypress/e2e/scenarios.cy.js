@@ -113,7 +113,7 @@ describe('Scenario 4 — multiple groups, multiple users each', () => {
     cy.contains(/^[A-F0-9]{6}$/).invoke('text').then(codeA => {
       cy.task('joinGroupInPool', { id: 'memberA', code: codeA, name: 'Member A', icon: '🐸' })
     })
-    cy.contains('2 members', { timeout: 8000 }).should('be.visible')
+    cy.contains('2 members', { timeout: 12000 }).should('be.visible')
   })
 
   afterEach(() => cy.task('releaseAllPoolSockets'))

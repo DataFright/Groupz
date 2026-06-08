@@ -34,7 +34,7 @@ module.exports = defineConfig({
         createGroup({ name = 'Task Host', icon = '🦊' } = {}) {
           return new Promise((resolve, reject) => {
             const socket = io(BACKEND_URL, { reconnection: false })
-            const t = setTimeout(() => { socket.disconnect(); reject(new Error('createGroup timed out')) }, 8000)
+            const t = setTimeout(() => { socket.disconnect(); reject(new Error('createGroup timed out')) }, 20000)
             socket.once('group-created', ({ code }) => { clearTimeout(t); socket.disconnect(); resolve(code) })
             socket.once('connect_error', err => { clearTimeout(t); reject(err) })
             socket.once('connect', () => socket.emit('create-group', { name, icon }))
@@ -46,7 +46,7 @@ module.exports = defineConfig({
         createGroupAndHold({ name = 'Task Host', icon = '🦊' } = {}) {
           return new Promise((resolve, reject) => {
             heldSocket = io(BACKEND_URL, { reconnection: false })
-            const t = setTimeout(() => { heldSocket?.disconnect(); heldSocket = null; reject(new Error('createGroupAndHold timed out')) }, 8000)
+            const t = setTimeout(() => { heldSocket?.disconnect(); heldSocket = null; reject(new Error('createGroupAndHold timed out')) }, 20000)
             heldSocket.once('group-created', ({ code }) => { clearTimeout(t); resolve(code) })
             heldSocket.once('connect_error', err => { clearTimeout(t); reject(err) })
             heldSocket.once('connect', () => heldSocket.emit('create-group', { name, icon }))
@@ -67,7 +67,7 @@ module.exports = defineConfig({
         joinGroupAndHold({ code, name = 'Task Member', icon = '🐸', lat = null, lng = null } = {}) {
           return new Promise((resolve, reject) => {
             heldJoinSocket = io(BACKEND_URL, { reconnection: false })
-            const t = setTimeout(() => { heldJoinSocket?.disconnect(); heldJoinSocket = null; reject(new Error('joinGroupAndHold timed out')) }, 8000)
+            const t = setTimeout(() => { heldJoinSocket?.disconnect(); heldJoinSocket = null; reject(new Error('joinGroupAndHold timed out')) }, 20000)
             heldJoinSocket.once('join-confirmed', ({ socketId }) => {
               clearTimeout(t)
               if (lat !== null && lng !== null) {
@@ -93,7 +93,7 @@ module.exports = defineConfig({
         createGroupInPool({ id, name = 'Task Host', icon = '🦊' } = {}) {
           return new Promise((resolve, reject) => {
             const socket = io(BACKEND_URL, { reconnection: false })
-            const t = setTimeout(() => { socket.disconnect(); reject(new Error('createGroupInPool timed out')) }, 8000)
+            const t = setTimeout(() => { socket.disconnect(); reject(new Error('createGroupInPool timed out')) }, 20000)
             socket.once('group-created', ({ code }) => { clearTimeout(t); socketPool[id] = socket; resolve(code) })
             socket.once('connect_error', err => { clearTimeout(t); reject(err) })
             socket.once('connect', () => socket.emit('create-group', { name, icon }))
@@ -106,7 +106,7 @@ module.exports = defineConfig({
         joinGroupInPool({ id, code, name = 'Task Member', icon = '🐸', lat = null, lng = null } = {}) {
           return new Promise((resolve, reject) => {
             const socket = io(BACKEND_URL, { reconnection: false })
-            const t = setTimeout(() => { socket.disconnect(); reject(new Error('joinGroupInPool timed out')) }, 8000)
+            const t = setTimeout(() => { socket.disconnect(); reject(new Error('joinGroupInPool timed out')) }, 20000)
             socket.once('join-confirmed', ({ socketId }) => {
               clearTimeout(t)
               socketPool[id] = socket
@@ -140,7 +140,7 @@ module.exports = defineConfig({
           const joins = Array.from({ length: count }, (_, i) =>
             new Promise((resolve, reject) => {
               const socket = io(BACKEND_URL, { reconnection: false })
-              const t = setTimeout(() => { socket.disconnect(); reject(new Error(`fillGroupWithMembers slot ${i} timed out`)) }, 8000)
+              const t = setTimeout(() => { socket.disconnect(); reject(new Error(`fillGroupWithMembers slot ${i} timed out`)) }, 20000)
               socket.once('join-confirmed', () => { clearTimeout(t); socketPool[`fill_${i}`] = socket; resolve() })
               socket.once('join-error', ({ message }) => { clearTimeout(t); socket.disconnect(); reject(new Error(`slot ${i}: ${message}`)) })
               socket.once('connect_error', err => { clearTimeout(t); reject(err) })

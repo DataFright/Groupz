@@ -18,6 +18,7 @@ Real-time group location sharing for caravans, road trips, and meetups. Create a
 - Inactive members faded after 10s, removed after 60s
 - Max 20 members per group, 16-hour hard group lifetime
 - IP rate limiting (100 creates / 300 joins per hour, configurable)
+- Server health and usage monitoring (`/health`, `/api/metrics`)
 
 ---
 
@@ -45,7 +46,7 @@ Leave `VITE_SOCKET_URL` empty in `client/.env` — the Vite dev server proxies s
 |---|---|
 | [Architecture](docs/architecture.md) | System design, group lifecycle, state shape, server limits |
 | [Protocol](docs/protocol.md) | Socket events, error codes, REST endpoints, member object shape |
-| [Testing](docs/testing.md) | Server Vitest (113), Client Vitest (43), Cypress e2e (74), task infrastructure |
+| [Testing](docs/testing.md) | Server Vitest (140), Client Vitest (51), Cypress e2e (77), task infrastructure |
 | [Deployment](docs/deployment.md) | Render + Vercel setup, Docker, environment variables, common gotchas |
 | [Benchmarks](docs/benchmarks.md) | Load test results, estimated capacity by tier, scaling path |
 
@@ -58,8 +59,8 @@ Groupz/
 ├── docs/                   # Architecture, protocol, testing, deployment, benchmarks
 ├── docker-compose.yml
 ├── server/
-│   ├── src/                # app.js, helpers.js, errorCodes.js
-│   ├── tests/              # unit, smoke, function, integration, scenarios, cleanup
+│   ├── src/                # app.js, helpers.js, errorCodes.js, metrics.js
+│   ├── tests/              # unit, smoke, function, integration, scenarios, cleanup, metrics
 │   ├── scripts/            # docker-smoke.js, load-test.js
 │   ├── Dockerfile
 │   └── server.js
@@ -69,5 +70,5 @@ Groupz/
     │   ├── tests/          # smoke, unit, integration
     │   └── App.jsx
     └── cypress/
-        └── e2e/            # 14 spec files
+        └── e2e/            # 15 spec files
 ```

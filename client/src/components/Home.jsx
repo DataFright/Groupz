@@ -1,6 +1,6 @@
 import { useState, useEffect, useRef } from 'react'
 import { socket } from '../socket.js'
-import { ICONS } from './IconPicker.jsx'
+import { ICONS } from '../constants/icons.js'
 import IconPicker from './IconPicker.jsx'
 import { ErrorCode } from '../errorCodes.js'
 import styles from '../styles/Home.module.css'

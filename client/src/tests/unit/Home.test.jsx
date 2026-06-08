@@ -203,5 +203,51 @@ describe('Home', () => {
       })
       expect(socket.disconnect).toHaveBeenCalled()
     })
+
+    it('displays GROUP_NOT_FOUND error message', async () => {
+      render(<Home onJoin={vi.fn()} />)
+      const handler = getJoinErrorHandler()
+      await act(async () => {
+        handler({ code: 'GROUP_NOT_FOUND', message: 'Group not found', status: 404 })
+      })
+      await waitFor(() =>
+        expect(screen.getByText('Group not found')).toBeInTheDocument()
+      )
+    })
+
+    it('displays SERVER_ERROR message when the server has an internal failure', async () => {
+      render(<Home onJoin={vi.fn()} />)
+      const handler = getJoinErrorHandler()
+      await act(async () => {
+        handler({ code: 'SERVER_ERROR', message: 'Could not generate group code', status: 500 })
+      })
+      await waitFor(() =>
+        expect(screen.getByText('Could not generate group code')).toBeInTheDocument()
+      )
+    })
+
+    it('does not crash when the server sends an error object without a code field', async () => {
+      render(<Home onJoin={vi.fn()} />)
+      const handler = getJoinErrorHandler()
+      await act(async () => {
+        handler({ message: 'Unexpected server error' })
+      })
+      // App should still be rendered — no thrown exception
+      expect(screen.getByText('Groupz')).toBeInTheDocument()
+    })
+
+    it('re-enables the submit button after a server error so the user can retry', async () => {
+      render(<Home onJoin={vi.fn()} />)
+      const user = userEvent.setup()
+      await user.type(screen.getByPlaceholderText('Enter your name'), 'Alice')
+      await user.click(submitBtn())
+      // Button disabled while waiting
+      expect(submitBtn()).toBeDisabled()
+      const handler = getJoinErrorHandler()
+      await act(async () => {
+        handler({ code: 'GROUP_NOT_FOUND', message: 'Group not found', status: 404 })
+      })
+      await waitFor(() => expect(submitBtn()).not.toBeDisabled())
+    })
   })
 })

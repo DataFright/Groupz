@@ -131,4 +131,48 @@ describe('Integration tests — App view routing', () => {
       expect(screen.getByTestId('group-map').dataset.host).toBe('false')
     )
   })
+
+  it('registers left-group socket listener on mount', () => {
+    render(<App />)
+    expect(socket.on).toHaveBeenCalledWith('left-group', expect.any(Function))
+  })
+
+  it('calls socket.disconnect on left-group', () => {
+    render(<App />)
+    trigger('left-group')
+    expect(socket.disconnect).toHaveBeenCalled()
+  })
+
+  it('group-ended returns the user to the Home view', async () => {
+    render(<App />)
+    // Enter map view first
+    act(() => {
+      handlers['group-created']?.forEach(h =>
+        h({ code: 'ABCDEF', socketId: 'test-socket-1', status: 201 })
+      )
+    })
+    await waitFor(() => expect(screen.getByTestId('group-map')).toBeInTheDocument())
+
+    trigger('group-ended')
+    await waitFor(() =>
+      expect(screen.queryByTestId('group-map')).not.toBeInTheDocument()
+    )
+    expect(screen.getByText('Groupz')).toBeInTheDocument()
+  })
+
+  it('removed-from-group returns the user to the Home view', async () => {
+    render(<App />)
+    act(() => {
+      handlers['group-created']?.forEach(h =>
+        h({ code: 'ABCDEF', socketId: 'test-socket-1', status: 201 })
+      )
+    })
+    await waitFor(() => expect(screen.getByTestId('group-map')).toBeInTheDocument())
+
+    trigger('removed-from-group')
+    await waitFor(() =>
+      expect(screen.queryByTestId('group-map')).not.toBeInTheDocument()
+    )
+    expect(screen.getByText('Groupz')).toBeInTheDocument()
+  })
 })

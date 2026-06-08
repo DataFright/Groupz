@@ -13,11 +13,34 @@ if (!isTest && !existsSync(LOG_DIR)) mkdirSync(LOG_DIR, { recursive: true })
 
 const BOT_UA = /bot|crawler|spider|scraper|curl|wget|python|go-http|libwww|httpclient|okhttp|node-fetch|got\//i
 
+export function parseUA(ua) {
+  // 'unknown' = no UA sent at all;  'other' = UA present but unrecognised
+  if (!ua) return { device: 'unknown', os: 'unknown', browser: 'unknown' }
+  const device  = /iPad|Tablet/i.test(ua)                    ? 'tablet'   // before Mobile — iPad UA includes "Mobile"
+                : /Mobile|Android|iPhone|iPod/i.test(ua)    ? 'mobile'
+                : /Mozilla|Windows|Macintosh|X11/i.test(ua) ? 'desktop'
+                : 'other'
+  const os      = /iPhone|iPad|iPod/i.test(ua)               ? 'iOS'
+                : /Android/i.test(ua)                         ? 'Android'
+                : /Windows/i.test(ua)                         ? 'Windows'
+                : /Mac OS X/i.test(ua)                        ? 'macOS'
+                : /Linux/i.test(ua)                           ? 'Linux'
+                : 'other'
+  const browser = /Edg\//i.test(ua)                          ? 'Edge'
+                : /OPR\//i.test(ua)                           ? 'Opera'
+                : /SamsungBrowser/i.test(ua)                  ? 'Samsung'
+                : /Chrome/i.test(ua)                          ? 'Chrome'
+                : /Firefox/i.test(ua)                         ? 'Firefox'
+                : /Safari/i.test(ua)                          ? 'Safari'
+                : 'other'
+  return { device, os, browser }
+}
+
 function fingerprint(ip, ua) {
   return createHash('sha256').update(`${ip}:::${ua}`).digest('hex').slice(0, 12)
 }
 
-function botLikelihood(ua) {
+export function botLikelihood(ua) {
   if (!ua) return 8
   if (BOT_UA.test(ua)) return 9
   if (!ua.includes('Mozilla')) return 5
@@ -33,11 +56,19 @@ function ctDate(ts) {
   }).format(new Date(ts))
 }
 
+function fmtTime(ts, tz) {
+  // Returns e.g. "5:58 PM CDT"; returns '—' for invalid timestamp or unrecognised timezone
+  try {
+    return new Date(ts).toLocaleTimeString('en-US', {
+      timeZone: tz, hour: 'numeric', minute: '2-digit', hour12: true, timeZoneName: 'short',
+    })
+  } catch {
+    return '—'
+  }
+}
+
 function ctTime(ts) {
-  // Returns e.g. "5:58 PM"
-  return new Date(ts).toLocaleTimeString('en-US', {
-    timeZone: CT_TZ, hour: 'numeric', minute: '2-digit', hour12: true,
-  })
+  return fmtTime(ts, CT_TZ)
 }
 
 function ctHour(ts) {
@@ -54,11 +85,12 @@ const geoCache = new Map()
 async function lookupGeo(ip) {
   if (geoCache.has(ip)) return geoCache.get(ip)
   try {
-    const res = await fetch(`http://ip-api.com/json/${ip}?fields=status,city,regionName,country`)
+    const res = await fetch(`http://ip-api.com/json/${ip}?fields=status,city,regionName,country,timezone`)
     if (!res.ok) return null
     const d = await res.json()
     if (d.status !== 'success') return null
-    const geo = { city: d.city, region: d.regionName, country: d.country }
+    const geo = { city: d.city, region: d.regionName, country: d.country, timezone: d.timezone || null }
+    if (geoCache.size >= 2000) geoCache.delete(geoCache.keys().next().value)  // LRU-style eviction
     geoCache.set(ip, geo)
     return geo
   } catch {
@@ -81,6 +113,7 @@ export function sessionStart(socket) {
     ip,
     fingerprint: fingerprint(ip, ua),
     userAgent: ua,
+    ...parseUA(ua),
     botLikelihood: botLikelihood(ua),
     connectedAt: now,
     dateCt: ctDate(now),
@@ -203,7 +236,10 @@ function buildWindow(records, days) {
       sessions: sessions
         .sort((a, b) => new Date(a.connectedAt) - new Date(b.connectedAt))
         .map(r => ({
-          timeCt:        r.timeCt || ctTime(r.connectedAt),
+          timeCt:    fmtTime(r.connectedAt, CT_TZ),
+          timeLocal: r.timezone && r.timezone !== CT_TZ
+            ? fmtTime(r.connectedAt, r.timezone)
+            : null,
           name:          r.memberName || null,
           ip:            r.ip,
           location:      [r.city, r.region, r.country].filter(Boolean).join(', ') || 'Unknown',
@@ -214,6 +250,9 @@ function buildWindow(records, days) {
           gpsUpdates:    r.gpsUpdates,
           durationSeconds: r.durationSeconds,
           duration:      fmt(r.durationSeconds),
+          device:        r.device  || 'unknown',
+          os:            r.os      || 'unknown',
+          browser:       r.browser || 'unknown',
           botLikelihood: r.botLikelihood,
           isBot:         r.botLikelihood >= 5,
         })),

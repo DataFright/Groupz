@@ -2,6 +2,7 @@ import express from 'express'
 import { createServer } from 'http'
 import { Server } from 'socket.io'
 import cors from 'cors'
+import helmet from 'helmet'
 import { validateInput, generateCode, buildMemberList } from './helpers.js'
 import { ErrorCode, makeError } from './errorCodes.js'
 import { sessionStart, sessionAction, sessionGps, sessionEnd, getSummary } from './metrics.js'
@@ -13,10 +14,12 @@ export function createApp({
   maxGroupSize = 20,
   ipRateLimits,
 } = {}) {
-  const rlCreate = { max: ipRateLimits?.createGroup?.max ?? 100, windowMs: ipRateLimits?.createGroup?.windowMs ?? 3_600_000 }
-  const rlJoin   = { max: ipRateLimits?.joinGroup?.max  ?? 300, windowMs: ipRateLimits?.joinGroup?.windowMs  ?? 3_600_000 }
+  const rlCreate   = { max: ipRateLimits?.createGroup?.max ?? 100, windowMs: ipRateLimits?.createGroup?.windowMs ?? 3_600_000 }
+  const rlJoin     = { max: ipRateLimits?.joinGroup?.max  ?? 300, windowMs: ipRateLimits?.joinGroup?.windowMs  ?? 3_600_000 }
+  const rlLookup   = { max: 60, windowMs: 60_000 }   // 60 group lookups per minute per IP
   const ipCreateLimits = new Map()
   const ipJoinLimits   = new Map()
+  const ipLookupLimits = new Map()
 
   function checkRateLimit(map, ip, { max, windowMs }) {
     const now = Date.now()
@@ -40,8 +43,10 @@ export function createApp({
   const socketToGroup = {}
 
   const app = express()
+  app.set('trust proxy', 1)
+  app.use(helmet())
   app.use(cors({ origin: corsOrigin }))
-  app.use(express.json())
+  app.use(express.json({ limit: '10kb' }))
 
   const httpServer = createServer(app)
   const io = new Server(httpServer, {
@@ -60,6 +65,10 @@ export function createApp({
   })
 
   app.get('/api/groups/:code', (req, res) => {
+    const ip = req.ip || req.socket.remoteAddress
+    if (!checkRateLimit(ipLookupLimits, ip, rlLookup))
+      return res.status(429).json({ error: 'Too many requests' })
+
     const code = req.params.code.trim().toUpperCase()
     const group = groups[code]
     if (!group) {
@@ -91,6 +100,9 @@ export function createApp({
     }
     for (const [ip, entry] of ipJoinLimits) {
       if (now - entry.windowStart > rlJoin.windowMs) ipJoinLimits.delete(ip)
+    }
+    for (const [ip, entry] of ipLookupLimits) {
+      if (now - entry.windowStart > rlLookup.windowMs) ipLookupLimits.delete(ip)
     }
 
     for (const [code, group] of Object.entries(groups)) {
@@ -322,5 +334,5 @@ export function createApp({
     io.to(code).emit('members-update', buildMemberList(group))
   }
 
-  return { app, httpServer, io, groups, socketToGroup, cleanupTimer, ipCreateLimits, ipJoinLimits }
+  return { app, httpServer, io, groups, socketToGroup, cleanupTimer, ipCreateLimits, ipJoinLimits, ipLookupLimits }
 }

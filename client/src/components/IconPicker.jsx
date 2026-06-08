@@ -1,10 +1,5 @@
 import styles from '../styles/IconPicker.module.css'
-
-export const ICONS = [
-  '🦊','🐻','🐼','🐨','🦁','🐯','🦝','🐺',
-  '🦄','🐸','🐙','🦋','🌵','🌈','⚡','🔥',
-  '💎','🚀','🎸','🏔️'
-]
+import { ICONS } from '../constants/icons.js'
 
 export default function IconPicker({ value, onChange }) {
   return (
