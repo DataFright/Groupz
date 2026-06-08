@@ -8,6 +8,8 @@ RUN npm ci --omit=dev
 COPY server.js .
 COPY src/ ./src/
 
+RUN mkdir -p /app/logs && chown node:node /app/logs
+
 USER node
 
 EXPOSE 3001
