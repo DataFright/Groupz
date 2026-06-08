@@ -184,7 +184,7 @@ export function createApp({
 
       socket.emit('group-created', { code, socketId: socket.id, status: 201 })
       io.to(code).emit('members-update', buildMemberList(groups[code]))
-      sessionAction(socket.id, 'create', { code, name: name.trim(), icon })
+      sessionAction(socket.id, 'create', { code, name: name.trim(), icon, memberCount: Object.keys(groups[code].members).length })
     })
 
     socket.on('join-group', ({ code: rawCode, name, icon } = {}) => {
@@ -224,7 +224,7 @@ export function createApp({
 
       socket.emit('join-confirmed', { code, socketId: socket.id, hostSocketId: group.hostSocketId, status: 200 })
       io.to(code).emit('members-update', buildMemberList(group))
-      sessionAction(socket.id, 'join', { code, name: name.trim(), icon })
+      sessionAction(socket.id, 'join', { code, name: name.trim(), icon, memberCount: Object.keys(group.members).length })
     })
 
     socket.on('location-update', ({ lat, lng } = {}) => {
