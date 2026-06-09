@@ -19,11 +19,12 @@ L.Icon.Default.mergeOptions({
 })
 
 function createEmojiIcon(icon, isMe, active, dx = 0, dy = 0) {
+  const shift = (dx || dy) ? ` style="transform:translate(${dx}px,${dy}px)"` : ''
   return L.divIcon({
     className: '',
-    html: `<div class="emoji-marker${isMe ? ' emoji-marker--me' : ''}${!active ? ' emoji-marker--inactive' : ''}">${icon}</div>`,
+    html: `<div class="emoji-marker${isMe ? ' emoji-marker--me' : ''}${!active ? ' emoji-marker--inactive' : ''}"${shift}>${icon}</div>`,
     iconSize: [44, 44],
-    iconAnchor: [22 - dx, 44 - dy],
+    iconAnchor: [22, 44],
     popupAnchor: [0, -48]
   })
 }
@@ -114,6 +115,7 @@ function MapController({ members, mySocketId, onGeoError, flyToMeRef }) {
             icon={createEmojiIcon(m.icon, m.socketId === mySocketId, m.active, dx, dy)}
           >
             <Tooltip
+              key={`${m.socketId}-${dx}-${dy}`}
               permanent
               direction="top"
               offset={[dx, -48 + dy]}
@@ -202,11 +204,6 @@ export default function GroupMap({ groupInfo, members, onLeave }) {
 
       {/* Compass — north-up indicator */}
       <div className={styles.compass} aria-label="North is up">
-        <svg viewBox="0 0 40 40" width="28" height="28">
-          <polygon points="20,5 16,22 20,19 24,22" fill="#f87171" />
-          <polygon points="20,35 16,18 20,21 24,18" fill="#334155" />
-          <circle cx="20" cy="20" r="2.5" fill="#94a3b8" />
-        </svg>
         <span className={styles.compassN}>N</span>
       </div>
 

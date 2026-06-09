@@ -166,16 +166,15 @@
   backdrop-filter: blur(8px);
   box-shadow: 0 4px 16px rgba(0,0,0,0.4);
   display: flex;
-  flex-direction: column;
-  align-items: center;
+  align-items: flex-start;
   justify-content: center;
-  gap: 1px;
+  padding-top: 7px;
 }
 
 .compassN {
-  font-size: 9px;
+  font-size: 14px;
   font-weight: 700;
-  color: #f87171;
+  color: #e2e8f0;
   letter-spacing: 0.05em;
   line-height: 1;
 }
