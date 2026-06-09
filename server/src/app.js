@@ -122,7 +122,11 @@ export function createApp({
       }
 
       if (Object.keys(group.members).length === 0) {
-        delete groups[code]
+        // emptyAt is set when the last member disconnected unexpectedly.
+        // Give them 3 min to reconnect before deleting the group.
+        if (!group.emptyAt || now - group.emptyAt > 180_000) {
+          delete groups[code]
+        }
         continue
       }
 
@@ -235,6 +239,13 @@ export function createApp({
       socketToGroup[socket.id] = code
       socket.join(code)
 
+      // Rejoining an empty group (solo user reconnected after disconnect) —
+      // the previous host socket is gone, so promote the rejoining socket to host.
+      if (group.emptyAt !== undefined) {
+        group.hostSocketId = socket.id
+        delete group.emptyAt
+      }
+
       socket.emit('join-confirmed', { code, socketId: socket.id, hostSocketId: group.hostSocketId, status: 200 })
       io.to(code).emit('members-update', buildMemberList(group))
       sessionAction(socket.id, 'join', { code, name: name.trim(), icon, memberCount: Object.keys(group.members).length })
@@ -322,7 +333,11 @@ export function createApp({
     }
 
     if (Object.keys(group.members).length === 0) {
-      delete groups[code]
+      if (isDisconnect) {
+        group.emptyAt = Date.now()  // keep alive so the member can reconnect
+      } else {
+        delete groups[code]  // voluntary leave — no reconnect expected
+      }
       return
     }
 

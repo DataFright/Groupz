@@ -131,6 +131,44 @@ describe('Cleanup — auto-remove inactive members', () => {
     expect(socketToGroup[solo.id]).toBeUndefined()
   })
 
+  it('keeps empty group during the 3-min reconnect grace period after disconnect', async () => {
+    const solo = await connect(serverUrl)
+    const { code } = await new Promise(resolve => {
+      solo.once('group-created', resolve)
+      solo.emit('create-group', { name: 'Solo', icon: '🦊' })
+    })
+
+    await new Promise(resolve => {
+      solo.once('disconnect', resolve)
+      solo.disconnect()
+    })
+    await new Promise(r => setTimeout(r, WAIT))
+
+    // Group must survive cleanup ticks while within the grace period
+    expect(groups[code]).toBeDefined()
+    expect(groups[code].emptyAt).toBeDefined()
+  })
+
+  it('deletes empty group once grace period expires', async () => {
+    const solo = await connect(serverUrl)
+    const { code } = await new Promise(resolve => {
+      solo.once('group-created', resolve)
+      solo.emit('create-group', { name: 'Solo', icon: '🦊' })
+    })
+
+    await new Promise(resolve => {
+      solo.once('disconnect', resolve)
+      solo.disconnect()
+    })
+    await new Promise(r => setTimeout(r, 50))
+
+    // Simulate grace period already expired
+    groups[code].emptyAt = Date.now() - 181_000
+
+    await new Promise(r => setTimeout(r, WAIT))
+    expect(groups[code]).toBeUndefined()
+  })
+
   // ─── Host transfer ──────────────────────────────────────────────────────────
 
   it('transfers the host when the idle member was the host', async () => {

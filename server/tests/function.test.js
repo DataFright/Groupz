@@ -525,7 +525,7 @@ describe('Function tests — socket event handlers', () => {
       expect(groups[code].hostSocketId).toBe(member.id)
     })
 
-    it('when the last member disconnects, the group is deleted', async () => {
+    it('when the last member disconnects, the group is kept briefly for reconnect', async () => {
       const c = await connect(serverUrl)
       const { code } = await createGroup(c)
 
@@ -535,8 +535,31 @@ describe('Function tests — socket event handlers', () => {
       })
       await new Promise(r => setTimeout(r, 100))
 
-      expect(groups[code]).toBeUndefined()
+      // Group must still exist so the member can reconnect and rejoin
+      expect(groups[code]).toBeDefined()
+      expect(groups[code].emptyAt).toBeDefined()
       expect(socketToGroup[c.id]).toBeUndefined()
+    })
+
+    it('last member reconnects and rejoins as host', async () => {
+      const c = await connect(serverUrl)
+      const { code } = await createGroup(c)
+
+      await new Promise(resolve => {
+        c.once('disconnect', resolve)
+        c.disconnect()
+      })
+      await new Promise(r => setTimeout(r, 100))
+
+      const c2 = await connect(serverUrl)
+      const confirmed = await new Promise(resolve => {
+        c2.once('join-confirmed', resolve)
+        c2.emit('join-group', { code, name: 'Solo', icon: '🦊' })
+      })
+      expect(confirmed.code).toBe(code)
+      expect(confirmed.hostSocketId).toBe(c2.id)
+      expect(groups[code].emptyAt).toBeUndefined()
+      c2.disconnect()
     })
 
     it('disconnect of a socket not in any group is a no-op', async () => {

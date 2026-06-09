@@ -142,7 +142,7 @@ describe('Integration — Part 1: session, host transfer, and lifecycle', () => 
     expect(groups[code]).toBeUndefined()
   })
 
-  it('group is deleted when the last member disconnects abruptly', async () => {
+  it('group is kept briefly when the last member disconnects abruptly', async () => {
     const c = await connect(serverUrl)
     const { code } = await new Promise(resolve => {
       c.once('group-created', resolve)
@@ -154,7 +154,9 @@ describe('Integration — Part 1: session, host transfer, and lifecycle', () => 
       c.disconnect()
     })
     await new Promise(r => setTimeout(r, 100))
-    expect(groups[code]).toBeUndefined()
+    // Group persists so the member can reconnect within the grace period
+    expect(groups[code]).toBeDefined()
+    expect(groups[code].emptyAt).toBeDefined()
   })
 
   // ─── end-group broadcast ───────────────────────────────────────────────────
