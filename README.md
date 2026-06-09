@@ -13,7 +13,8 @@ Real-time group location sharing for caravans, road trips, and meetups. Create a
 - Fullscreen interactive map (OpenStreetMap via Leaflet) with emoji markers and name tooltips
 - North compass indicator — map is always north-up, so you always know your orientation
 - Overlapping markers spread apart radially so everyone's icon and name are always readable
-- Mobile screen-lock reconnect — locking your phone shows a "Reconnecting…" banner and automatically rejoins the group when you unlock, with no manual steps
+- Screen Wake Lock — keeps the display on while the map is active so the phone doesn't sleep mid-trip (Chrome/Edge 84+, Safari iOS 16.4+, Firefox 126+)
+- Mobile screen-lock reconnect — if the screen does lock, shows a "Reconnecting…" banner and automatically rejoins the group when you unlock, with no manual steps. Solo members get a 3-minute grace period before the group expires
 - Re-center button, geolocation error banner, connection-lost notification
 - Member count and Members drawer with HOST/You badges
 - Host controls: remove members, end the group for everyone
@@ -50,7 +51,7 @@ Leave `VITE_SOCKET_URL` empty in `client/.env` — the Vite dev server proxies s
 | [Architecture](docs/architecture.md) | System design, group lifecycle, map features, state shape, server limits |
 | [Mobile](docs/mobile.md) | Screen-lock reconnect, mobile behaviour, limitations |
 | [Protocol](docs/protocol.md) | Socket events, error codes, REST endpoints, member object shape |
-| [Testing](docs/testing.md) | Server Vitest (164), Client Vitest (60), Cypress e2e, task infrastructure |
+| [Testing](docs/testing.md) | Server Vitest (171), Client Vitest (65), Cypress e2e (91 tests, 16 specs), task infrastructure |
 | [Deployment](docs/deployment.md) | Render + Vercel setup, Docker, environment variables, common gotchas |
 | [Benchmarks](docs/benchmarks.md) | Load test results, estimated capacity by tier, scaling path |
 
@@ -75,5 +76,5 @@ Groupz/
     │   ├── tests/          # smoke, unit, integration
     │   └── App.jsx
     └── cypress/
-        └── e2e/            # 15 spec files
+        └── e2e/            # 16 spec files (91 tests)
 ```

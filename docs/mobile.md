@@ -10,9 +10,36 @@ On mobile browsers, locking the phone screen (or pressing the power button, or s
 
 Without any mitigation, the user unlocks their phone and finds themselves on the home screen with a "Connection lost" message — they have to manually rejoin and re-enter the code. For a caravan or road-trip app this is a significant friction point, since passengers naturally lock their screens between glances.
 
-## How Groupz handles it
+---
 
-Instead of going home on every unexpected disconnect, the app enters a **reconnecting state**.
+## Wake lock: keeping the screen on
+
+Groupz uses the **Screen Wake Lock API** to request that the device keep the display on while the map is active. This prevents the screen from sleeping in the first place, so the disconnect never happens in most real-world use cases.
+
+### How it works
+
+- When the user joins or creates a group and the map mounts, Groupz calls `navigator.wakeLock.request('screen')`
+- The OS honours the request and keeps the display on
+- When the user returns to the app after a screen lock/unlock cycle, the wake lock is automatically re-acquired (the lock is released by the browser on screen-off and re-requested when the page becomes visible again)
+- When the user leaves or ends the group, the wake lock is released
+
+### Browser support
+
+| Browser | Wake lock support |
+|---|---|
+| Chrome / Edge (desktop + Android) | 84+ (2020) |
+| Safari iOS | 16.4+ (2023) |
+| Firefox | 126+ (2024) |
+
+On older or unsupported browsers the wake lock silently does nothing — the app still works normally, and the reconnect flow described below remains the fallback.
+
+**Note:** Low-power mode (iOS) and some Android power-saving settings can override the wake lock and let the screen sleep anyway. Wake lock is best-effort, not a guarantee.
+
+---
+
+## Reconnect flow: the fallback for when the screen does lock
+
+Even with wake lock, some users will see a screen-off event (low battery mode, manual lock, permissions denied). Instead of dropping the user to the home screen, the app enters a **reconnecting state**.
 
 ### What the user sees
 
@@ -25,9 +52,16 @@ If reconnection takes longer (poor signal), the banner stays visible while retri
 
 ### What happens server-side
 
-The server removes the member on disconnect (standard behaviour). When the client reconnects and re-emits `join-group`, the server treats it as a normal join: the member appears in the group again under a new socket ID. Other members in the group see a brief gap in the member list and then see them return.
+When a member disconnects, the server removes them from the group. When the client reconnects and re-emits `join-group`, the server rejoins them normally.
 
-The server's zombie-socket cleanup threshold is 3 minutes. This is the safety net for sockets that are technically still connected but have stopped sending heartbeats — it does not affect the reconnect flow, which relies on a clean disconnect/reconnect cycle.
+For the case where the disconnecting member is the **last member** in the group:
+
+- On disconnect, the server sets `group.emptyAt` to the current timestamp and keeps the group alive
+- The cleanup interval (runs every 60 s) skips groups whose `emptyAt` is within the past 3 minutes
+- If the member reconnects within **3 minutes**, they are rejoined as host (`isRejoin` flag). `emptyAt` is cleared
+- If 3 minutes pass without a reconnect, the group is deleted on the next cleanup tick
+
+Voluntary leaves (`leave-group` event) delete the group immediately regardless — no grace period is needed since the user explicitly chose to leave.
 
 ---
 
@@ -59,9 +93,9 @@ timeout: 10000 ms
 **Page Visibility API** (`onVisibilityChange`):
 - When `document.visibilityState` changes to `'visible'` (screen unlock), if the socket is disconnected and a pending rejoin exists, call `socket.connect()` immediately rather than waiting for the next auto-retry tick
 
-### Server side
+### Wake lock (`GroupMap.jsx`)
 
-No special reconnect handling is needed. The server processes the new `join-group` event normally — if the code is still valid, the member is added back. The previous socket entry was already cleaned up on disconnect.
+A second `visibilitychange` listener in GroupMap re-acquires the wake lock when the page becomes visible. This runs independently from App.jsx's reconnect listener — both coexist on the same event without conflict.
 
 ---
 
@@ -70,7 +104,8 @@ No special reconnect handling is needed. The server processes the new `join-grou
 | Scenario | Outcome |
 |---|---|
 | Screen locked briefly, group has other members | Seamless rejoin — amber banner flashes and disappears |
-| Screen locked, user was the sole member | Group deleted while offline → `GROUP_NOT_FOUND` on rejoin → home with "Your group ended while you were away" |
+| Screen locked, user was the sole member | Group kept alive for 3 minutes (`emptyAt` grace period). User reconnects as host within that window |
+| Sole member does not reconnect within 3 minutes | Group deleted → `GROUP_NOT_FOUND` on rejoin → home with "Your group ended while you were away" |
 | All 10 reconnect attempts fail (no signal) | `reconnect_failed` event → home with "Could not reconnect. Please rejoin the group." |
 | User intentionally leaves before reconnect completes | `leave-group` → `io client disconnect` reason → no reconnect attempted |
 | Host removed the user while offline | Rejoin attempt gets `join-error` → home with "Could not rejoin the group." |
@@ -80,8 +115,11 @@ No special reconnect handling is needed. The server processes the new `join-grou
 
 ## Limitations
 
-**Reconnect window**
-The reconnect window is limited by how long the group stays alive without the user. If the user was the only member, the group is deleted as soon as they disconnect — they cannot reconnect to it. If there are other members, the group persists and reconnect works.
+**Wake lock and power-saving**
+Wake lock is best-effort. iOS low-power mode and some Android battery optimisations can override it. In those cases the reconnect flow activates instead.
+
+**Reconnect window for solo users**
+If the user was the only member and they are offline for more than 3 minutes, the group is deleted. The 3-minute window covers nearly all real-world screen-lock durations (phone stayed in pocket, checked an app, etc.).
 
 **Signal loss**
 If the device has no network signal at all (e.g. out of coverage, airplane mode), all 10 reconnect attempts will fail. The app goes home after ~45 seconds of retrying (sum of 10 back-off intervals). When signal returns, the user has to rejoin manually.
@@ -94,12 +132,28 @@ A native mobile app built with Capacitor or React Native can access the OS backg
 
 ---
 
-## Testing the reconnect flow manually
+## Testing manually
 
-1. Open Groupz on your phone browser
+### Wake lock test
+
+1. Open Groupz on your phone in Chrome or Safari iOS 16.4+
+2. Create or join a group
+3. Leave your phone idle on the map screen — the screen should stay on indefinitely
+4. Lock the screen manually, then unlock immediately
+5. The screen should stay on again after unlocking (wake lock re-acquired)
+6. Leave the group — the normal screen timeout resumes
+
+### Reconnect flow test
+
+**With other members:**
+1. Open Groupz on your phone
 2. Create or join a group with at least one other member
 3. Lock the phone screen for 5–10 seconds
 4. Unlock the screen
 5. You should see the amber "Reconnecting…" banner for a moment, then return to the live map
 
-If you are the only member, lock the screen for 5+ seconds, then unlock. You should see "Your group ended while you were away" and be returned to the home screen.
+**As sole member (3-minute grace period):**
+1. Create a group alone
+2. Lock the screen for under 3 minutes, then unlock
+3. The amber banner should appear and then disappear as you rejoin as host
+4. Optionally, lock the screen for over 3 minutes — you should see "Your group ended while you were away"

@@ -2,7 +2,7 @@
 
 Three test layers cover the full stack. All must pass before merging.
 
-## 1. Server — Vitest (164 tests)
+## 1. Server — Vitest (171 tests)
 
 Located in `server/tests/`. Tests use the `createApp()` factory directly — each suite spins up its own server on a random port and tears it down after. No shared state between suites.
 
@@ -12,15 +12,15 @@ cd server && npm test
 
 | File | Tests | What it covers |
 |---|---|---|
-| `unit.test.js` | 30 | Pure helper functions: `validateInput` (all error branches including control characters), `generateCode` (collisions, null return), `buildMemberList` (shape, null coords, no internal fields leaked), `makeError`, all error codes |
+| `unit.test.js` | 34 | Pure helper functions: `validateInput` (all error branches including control characters), `generateCode` (collisions, null return), `buildMemberList` (shape, null coords, no internal fields leaked), `makeError`, all error codes; `buildWindow` rejoin action counting (rejoin vs join vs noGroupAction) |
 | `smoke.test.js` | 5 | Server starts cleanly, health endpoint responds, group lookup 404, socket connects/disconnects, unknown events silently ignored |
 | `metrics.test.js` | 27 | Usage stats API auth (no key, wrong key, correct key), user-agent parsing, bot-likelihood scoring |
-| `function.test.js` | 56 | Each socket event handler and REST endpoint in isolation with a single client. Covers: `create-group` (happy path, INVALID_NAME, INVALID_ICON, control-char names, no payload), `join-group` (happy path, GROUP_NOT_FOUND, CODE_REQUIRED, non-string code, missing code, lowercase normalisation, INVALID_NAME), `location-update` (happy path, rate limit, out-of-range, NaN, Infinity, missing field, empty payload, not-in-group), `leave-group` (happy path, not-in-group no-op), `remove-member` (host removes member, non-host blocked, self-removal blocked, already-left silent, no-targetId silent), `end-group` (host ends, non-host blocked, not-in-group no-op, socketToGroup fully cleared), `disconnect` (host disconnect → host-changed, last member → group deleted, non-group no-op, members-update after host disconnect), REST API (`/health`, `/api/groups/:code` 200/404/case-insensitive, group lookup 429 rate limit), group size limit (GROUP_FULL), IP rate limiting (create and join RATE_LIMITED) |
-| `integration.test.js` | 11 | Multi-client flows: full create→join→location session, host transfer, group lifecycle (last member leaves, last member disconnects), end-group broadcast, remove-member cascade, simultaneous location updates, re-join with same socket updates name/icon |
+| `function.test.js` | 57 | Each socket event handler and REST endpoint in isolation with a single client. Covers: `create-group` (happy path, INVALID_NAME, INVALID_ICON, control-char names, no payload), `join-group` (happy path, GROUP_NOT_FOUND, CODE_REQUIRED, non-string code, missing code, lowercase normalisation, INVALID_NAME), `location-update` (happy path, rate limit, out-of-range, NaN, Infinity, missing field, empty payload, not-in-group), `leave-group` (happy path, not-in-group no-op), `remove-member` (host removes member, non-host blocked, self-removal blocked, already-left silent, no-targetId silent), `end-group` (host ends, non-host blocked, not-in-group no-op, socketToGroup fully cleared), `disconnect` (host disconnect → host-changed, last member disconnect → group kept alive with `emptyAt`, last member reconnects as host, non-group no-op, members-update after host disconnect), REST API (`/health`, `/api/groups/:code` 200/404/case-insensitive, group lookup 429 rate limit), group size limit (GROUP_FULL), IP rate limiting (create and join RATE_LIMITED) |
+| `integration.test.js` | 11 | Multi-client flows: full create→join→location session, host transfer, group lifecycle (last member leaves, last member disconnects briefly then group kept alive with `emptyAt`), end-group broadcast, remove-member cascade, simultaneous location updates, re-join with same socket updates name/icon |
 | `scenarios.test.js` | 26 | Four real-world group shapes: single user, multiple users one group, multiple groups one user each, multiple groups multiple users each — isolation and cross-contamination checks at each layer |
-| `cleanup.test.js` | 9 | Inactivity auto-remove (180s threshold), evicted member receives `removed-from-group`, remaining members receive `members-update`, solo group deleted when last member goes idle, host transfer on idle host, new host can end after transfer, hard age limit (`maxGroupAgeMs`), `socketToGroup` cleanup on age limit, all-members notified on age limit |
+| `cleanup.test.js` | 11 | Inactivity auto-remove (180s threshold), evicted member receives `removed-from-group`, remaining members receive `members-update`, solo group deleted when last member goes idle, solo disconnect keeps group alive during 3-min grace period (`emptyAt`), group deleted after grace period expires, host transfer on idle host, new host can end after transfer, hard age limit (`maxGroupAgeMs`), `socketToGroup` cleanup on age limit, all-members notified on age limit |
 
-## 2. Client — Vitest (60 tests)
+## 2. Client — Vitest (65 tests)
 
 Located in `client/src/tests/`. Uses React Testing Library with a mocked `socket.io-client` singleton.
 
@@ -33,9 +33,10 @@ cd client && npm test
 | `smoke.test.jsx` | 7 | App mounts without crashing, home screen by default, no map on load, tabs present, name input, submit button, 20 icon options |
 | `unit/Home.test.jsx` | 22 | Rendering, tab switching (clears errors), client-side validation (empty name, >16 chars, missing code), socket interaction (connect + emit on submit), auto-uppercase code, loading state, `GROUP_FULL`, `RATE_LIMITED`, `GROUP_NOT_FOUND`, `SERVER_ERROR` error display, socket disconnect on error, re-enables submit after error |
 | `unit/IconPicker.test.jsx` | 9 | 20 icons rendered, aria-labels, type="button" to prevent form submission, onChange callback, selected CSS class, only one selected at a time, value prop change, 20-entry ICONS array, uniqueness |
+| `unit/GroupMap.wake-lock.test.jsx` | 5 | Screen Wake Lock API: lock requested on mount, re-requested on `visibilitychange` to visible, released on unmount, no-op when `navigator.wakeLock` is unavailable, silent error handling for rejected requests |
 | `integration/AppFlow.test.jsx` | 22 | Mocked socket flow: starts on home, registers/deregisters all listeners, `removed-from-group` and `group-ended` go home with notification and call `socket.disconnect`, `left-group` goes home, `host-changed` marks non-host, create-group navigates to map, `members-update` propagates member count to GroupMap, intentional disconnect skips reconnect, unexpected disconnect stays on map with `isReconnecting=true`, connect-after-disconnect emits `join-group` and clears reconnecting on `join-confirmed`, `reconnect_failed` goes home with notification, `join-error GROUP_NOT_FOUND` during rejoin shows "group ended" message, `join-confirmed` while not rejoining is silently ignored, `join-error` while not rejoining is silently ignored, `visibilitychange` while disconnected triggers `socket.connect` |
 
-## 3. End-to-end — Cypress 13 in Chrome
+## 3. End-to-end — Cypress 13 in Chrome (91 tests, 16 specs)
 
 Located in `client/cypress/e2e/`. Requires both servers running. Uses Chrome headless.
 
@@ -57,7 +58,8 @@ The wrapper script is required when running from VS Code — VS Code sets `ELECT
 | `tabs-and-validation.cy.js` | 7 | Tab switching, code auto-uppercase, submit label changes, client-side validation errors |
 | `validation-edge-cases.cy.js` | 3 | Whitespace-only name rejected, `maxlength` on name (16) and code (6) inputs |
 | `icon-picker.cy.js` | 3 | Default icon selected, clicking changes selection, persists across tab switch |
-| `create-group.cy.js` | 7 | Full create flow: map renders, CODE label, 6-char code displayed, End Group button, member count |
+| `api.cy.js` | 6 | REST API smoke: `/health` 200 + fields, `/api/groups/:code` 404 for unknown code, `/api/metrics` not-404/not-5xx, JSON content-type, auth key handling |
+| `create-group.cy.js` | 7 | Full create flow: map renders, north compass, CODE label, 6-char code displayed, End Group button, Leave button, member count |
 | `join-group.cy.js` | 6 | Valid join, non-host sees Leave not End Group, member count, map shows code, error for unknown code, group full error |
 | `group-session.cy.js` | 7 | End Group dialog (open, cancel, confirm), Leave dialog (open, cancel, confirm), Members drawer |
 | `group-code-copy.cy.js` | 2 | Copy button shows ✓ on click, reverts to ⎘ after 2s |
@@ -67,6 +69,7 @@ The wrapper script is required when running from VS Code — VS Code sets `ELECT
 | `geo-error.cy.js` | 4 | Banner appears when geolocation denied, includes browser error message, dismissed by ✕ button, absent when geolocation succeeds |
 | `recenter-button.cy.js` | 3 | 🎯 FAB is visible, clicking leaves map intact, clicking before first GPS fix resolves silently |
 | `scenarios.cy.js` | 11 | Four real-world group shapes at the UI layer: single user, multiple users, multiple groups one user each, multiple groups multiple users each |
+| `mobile-home.cy.js` | 11 | Home screen accessibility at 390×844: title and tabs visible, Create/Join submit buttons scrollable and reachable, icon picker tappable, Join tab fields all present, form validation, tab switch preserves typed name |
 
 ## Cypress task infrastructure
 
@@ -83,6 +86,16 @@ The wrapper script is required when running from VS Code — VS Code sets `ELECT
 | `releasePoolSocket` | Disconnects one named pool socket |
 | `releaseAllPoolSockets` | Disconnects and clears all pool sockets |
 | `fillGroupWithMembers` | Joins N members in parallel — used to fill a group to capacity |
+
+## Mobile test section
+
+The `mobile-home.cy.js` spec covers layout and interaction at a 390×844 viewport (iPhone 14 / similar). It verifies:
+
+- All critical UI elements (title, tabs, inputs, icon picker, submit buttons) are accessible without requiring horizontal scroll
+- The Join Group submit button is reachable by vertical scroll — tests the CSS fix that makes the container height-bounded and scrollable
+- Form validation and tab state work correctly at mobile size
+
+For the reconnect / wake lock mobile flows, see [docs/mobile.md](mobile.md). Those are best verified manually on a real device since they require OS-level screen lock behaviour.
 
 ## Testing conventions
 

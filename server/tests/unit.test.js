@@ -1,6 +1,7 @@
 import { describe, it, expect } from 'vitest'
 import { validateInput, generateCode, buildMemberList, ALLOWED_ICONS } from '../src/helpers.js'
 import { ErrorCode } from '../src/errorCodes.js'
+import { buildWindow } from '../src/metrics.js'
 
 // ─── validateInput — name validation ─────────────────────────────────────────
 
@@ -196,5 +197,64 @@ describe('makeError', () => {
       expect(err.status).toBeGreaterThanOrEqual(400)
       expect(err.status).toBeLessThan(600)
     }
+  })
+})
+
+// ─── buildWindow — rejoin action counting ─────────────────────────────────────
+
+function makeRecord(action, overrides = {}) {
+  return {
+    ip: '1.2.3.4',
+    fingerprint: 'abc123def456',
+    botLikelihood: 0,
+    gpsShared: false,
+    gpsUpdates: 0,
+    action,
+    durationSeconds: 60,
+    connectedAt: new Date().toISOString(),
+    dateCt: '2026-01-01',
+    ...overrides,
+  }
+}
+
+describe('buildWindow — rejoin action counting', () => {
+  it('counts rejoin actions separately from join and create', () => {
+    const w = buildWindow([
+      makeRecord('create'),
+      makeRecord('join'),
+      makeRecord('rejoin'),
+      makeRecord('rejoin'),
+    ], 7)
+    expect(w.actions.create).toBe(1)
+    expect(w.actions.join).toBe(1)
+    expect(w.actions.rejoin).toBe(2)
+    expect(w.actions.noGroupAction).toBe(0)
+  })
+
+  it('does not count rejoin as noGroupAction', () => {
+    const w = buildWindow([makeRecord('rejoin'), makeRecord(null)], 7)
+    expect(w.actions.rejoin).toBe(1)
+    expect(w.actions.noGroupAction).toBe(1)
+  })
+
+  it('returns rejoin: 0 when there are no rejoin records', () => {
+    const w = buildWindow([makeRecord('join'), makeRecord('create')], 7)
+    expect(w.actions.rejoin).toBe(0)
+  })
+
+  it('counts all four action types correctly in a mixed window', () => {
+    const w = buildWindow([
+      makeRecord('create'),
+      makeRecord('join'),
+      makeRecord('join'),
+      makeRecord('rejoin'),
+      makeRecord(null),
+      makeRecord(null),
+    ], 7)
+    expect(w.actions.create).toBe(1)
+    expect(w.actions.join).toBe(2)
+    expect(w.actions.rejoin).toBe(1)
+    expect(w.actions.noGroupAction).toBe(2)
+    expect(w.totalSessions).toBe(6)
   })
 })

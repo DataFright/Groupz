@@ -8,14 +8,12 @@ describe('Create group — map view', () => {
     cy.createGroupViaUI('Alice')
   })
 
-  it('shows a disabled submit button while connecting to the server', () => {
-    // Verify once the loading state resolves (map visible means it passed through disabled)
-    // We assert the map arrived, which confirms loading → success path ran
+  it('renders the Leaflet map after creation', () => {
     cy.get('.leaflet-container').should('exist')
   })
 
-  it('renders the Leaflet map after creation', () => {
-    cy.get('.leaflet-container').should('exist')
+  it('shows the north compass indicator', () => {
+    cy.get('[aria-label="North is up"]').should('be.visible')
   })
 
   it('shows the CODE label in the top bar', () => {

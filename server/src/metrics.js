@@ -189,7 +189,7 @@ export function getSummary() {
   }
 }
 
-function buildWindow(records, days) {
+export function buildWindow(records, days) {
   if (!records.length) return { windowDays: days, totalSessions: 0, byDate: {} }
 
   // Aggregate totals
