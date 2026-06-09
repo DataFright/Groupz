@@ -145,7 +145,32 @@ export default function GroupMap({ groupInfo, members, onLeave, isReconnecting }
   const [showLeaveConfirm, setShowLeaveConfirm] = useState(false)
   const [geoError, setGeoError] = useState(null)
   const flyToMeRef = useRef(null)
+  const wakeLockRef = useRef(null)
   const { code, mySocketId, isHost, hostSocketId } = groupInfo
+
+  useEffect(() => {
+    async function acquireWakeLock() {
+      if (!navigator.wakeLock) return
+      try {
+        wakeLockRef.current = await navigator.wakeLock.request('screen')
+      } catch {
+        // Silently ignore — unsupported browser or permission denied
+      }
+    }
+
+    function onVisibilityChange() {
+      if (document.visibilityState === 'visible') acquireWakeLock()
+    }
+
+    acquireWakeLock()
+    document.addEventListener('visibilitychange', onVisibilityChange)
+
+    return () => {
+      document.removeEventListener('visibilitychange', onVisibilityChange)
+      wakeLockRef.current?.release().catch(() => {})
+      wakeLockRef.current = null
+    }
+  }, [])
 
   function handleLeaveClick() {
     setShowLeaveConfirm(true)
