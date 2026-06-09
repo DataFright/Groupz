@@ -18,14 +18,38 @@ L.Icon.Default.mergeOptions({
   shadowUrl: markerShadow
 })
 
-function createEmojiIcon(icon, isMe, active) {
+function createEmojiIcon(icon, isMe, active, dx = 0, dy = 0) {
   return L.divIcon({
     className: '',
     html: `<div class="emoji-marker${isMe ? ' emoji-marker--me' : ''}${!active ? ' emoji-marker--inactive' : ''}">${icon}</div>`,
     iconSize: [44, 44],
-    iconAnchor: [22, 44],
+    iconAnchor: [22 - dx, 44 - dy],
     popupAnchor: [0, -48]
   })
+}
+
+// Groups markers at the same position (within ~11m) and spreads them radially
+// so overlapping icons and tooltips don't hide each other.
+function computeOverlapOffsets(members) {
+  const groups = {}
+  for (const m of members) {
+    const key = `${m.lat.toFixed(4)},${m.lng.toFixed(4)}`
+    if (!groups[key]) groups[key] = []
+    groups[key].push(m.socketId)
+  }
+  const offsets = {}
+  const RADIUS = 26
+  for (const ids of Object.values(groups)) {
+    if (ids.length === 1) {
+      offsets[ids[0]] = [0, 0]
+    } else {
+      ids.forEach((id, i) => {
+        const angle = (2 * Math.PI * i) / ids.length
+        offsets[id] = [Math.round(RADIUS * Math.cos(angle)), Math.round(RADIUS * Math.sin(angle))]
+      })
+    }
+  }
+  return offsets
 }
 
 // Inner component that has access to the map instance via react-leaflet context.
@@ -76,27 +100,30 @@ function MapController({ members, mySocketId, onGeoError, flyToMeRef }) {
     return () => clearInterval(intervalId)
   }, [onGeoError])
 
+  const visible = members.filter(m => m.lat !== null && m.lng !== null)
+  const offsets = computeOverlapOffsets(visible)
+
   return (
     <>
-      {members
-        .filter(m => m.lat !== null && m.lng !== null)
-        .map(m => (
+      {visible.map(m => {
+        const [dx, dy] = offsets[m.socketId] ?? [0, 0]
+        return (
           <Marker
             key={m.socketId}
             position={[m.lat, m.lng]}
-            icon={createEmojiIcon(m.icon, m.socketId === mySocketId, m.active)}
+            icon={createEmojiIcon(m.icon, m.socketId === mySocketId, m.active, dx, dy)}
           >
             <Tooltip
               permanent
               direction="top"
-              offset={[0, -48]}
+              offset={[dx, -48 + dy]}
               className="member-tooltip"
             >
               {m.name}
             </Tooltip>
           </Marker>
-        ))
-      }
+        )
+      })}
       <SetMapRef onMap={getMap} />
     </>
   )
@@ -171,6 +198,16 @@ export default function GroupMap({ groupInfo, members, onLeave }) {
             End Group
           </button>
         )}
+      </div>
+
+      {/* Compass — north-up indicator */}
+      <div className={styles.compass} aria-label="North is up">
+        <svg viewBox="0 0 40 40" width="28" height="28">
+          <polygon points="20,5 16,22 20,19 24,22" fill="#f87171" />
+          <polygon points="20,35 16,18 20,21 24,18" fill="#334155" />
+          <circle cx="20" cy="20" r="2.5" fill="#94a3b8" />
+        </svg>
+        <span className={styles.compassN}>N</span>
       </div>
 
       {/* Geolocation error banner */}
