@@ -239,16 +239,17 @@ export function createApp({
       socketToGroup[socket.id] = code
       socket.join(code)
 
-      // Rejoining an empty group (solo user reconnected after disconnect) —
+      // Rejoining an empty group (solo user reconnected after screen lock) —
       // the previous host socket is gone, so promote the rejoining socket to host.
-      if (group.emptyAt !== undefined) {
+      const isRejoin = group.emptyAt !== undefined
+      if (isRejoin) {
         group.hostSocketId = socket.id
         delete group.emptyAt
       }
 
       socket.emit('join-confirmed', { code, socketId: socket.id, hostSocketId: group.hostSocketId, status: 200 })
       io.to(code).emit('members-update', buildMemberList(group))
-      sessionAction(socket.id, 'join', { code, name: name.trim(), icon, memberCount: Object.keys(group.members).length })
+      sessionAction(socket.id, isRejoin ? 'rejoin' : 'join', { code, name: name.trim(), icon, memberCount: Object.keys(group.members).length })
     })
 
     socket.on('location-update', ({ lat, lng } = {}) => {

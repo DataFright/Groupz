@@ -196,7 +196,7 @@ function buildWindow(records, days) {
   const uniqueIps = new Set()
   const uniqueFp  = new Set()
   const fpCounts  = {}
-  let bots = 0, gps = 0, creates = 0, joins = 0, noAction = 0, totalDur = 0
+  let bots = 0, gps = 0, creates = 0, joins = 0, rejoins = 0, noAction = 0, totalDur = 0
   const durations = []
 
   for (const r of records) {
@@ -207,6 +207,7 @@ function buildWindow(records, days) {
     if (r.gpsShared) gps++
     if      (r.action === 'create') creates++
     else if (r.action === 'join')   joins++
+    else if (r.action === 'rejoin') rejoins++
     else                            noAction++
     totalDur += r.durationSeconds
     durations.push(r.durationSeconds)
@@ -267,7 +268,7 @@ function buildWindow(records, days) {
     returningVisitors: Object.values(fpCounts).filter(c => c > 1).length,
     suspectedBots: bots,
     likelyHumans: records.length - bots,
-    actions: { create: creates, join: joins, noGroupAction: noAction },
+    actions: { create: creates, join: joins, rejoin: rejoins, noGroupAction: noAction },
     gpsShared: { count: gps, rate: pct(gps, records.length) },
     duration: { avgSeconds: avg, medianSeconds: med, avg: fmt(avg), median: fmt(med) },
     byDate,
