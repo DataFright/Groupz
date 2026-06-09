@@ -6,22 +6,24 @@ import { ErrorCode } from '../errorCodes.js'
 import styles from '../styles/Home.module.css'
 
 export default function Home({ onJoin }) {
-  const [tab, setTab] = useState('create')
+  // Lazy initialisers read the URL once at mount — avoids calling setState in an effect.
+  const [tab, setTab] = useState(() => {
+    return new URLSearchParams(window.location.search).get('join') ? 'join' : 'create'
+  })
   const [name, setName] = useState('')
   const [icon, setIcon] = useState(ICONS[0])
-  const [code, setCode] = useState('')
+  const [code, setCode] = useState(() => {
+    const joinCode = new URLSearchParams(window.location.search).get('join')
+    return joinCode ? joinCode.toUpperCase().slice(0, 6) : ''
+  })
   const [loading, setLoading] = useState(false)
   const [error, setError] = useState('')
   const codeInputRef = useRef(null)
   const nameInputRef = useRef(null)
 
-  // Pre-fill join tab when arriving via a share link (?join=CODE)
+  // Clean the ?join= param from the URL without triggering navigation or a re-render
   useEffect(() => {
-    const params = new URLSearchParams(window.location.search)
-    const joinCode = params.get('join')
-    if (joinCode) {
-      setTab('join')
-      setCode(joinCode.toUpperCase().slice(0, 6))
+    if (new URLSearchParams(window.location.search).get('join')) {
       window.history.replaceState({}, '', '/')
     }
   }, [])
