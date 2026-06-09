@@ -1,4 +1,4 @@
-import { describe, it, expect, vi, beforeEach } from 'vitest'
+import { describe, it, expect, vi, beforeEach, afterEach } from 'vitest'
 import { render, screen, waitFor, fireEvent, act } from '@testing-library/react'
 import userEvent from '@testing-library/user-event'
 import Home from '../../components/Home.jsx'
@@ -248,6 +248,57 @@ describe('Home', () => {
         handler({ code: 'GROUP_NOT_FOUND', message: 'Group not found', status: 404 })
       })
       await waitFor(() => expect(submitBtn()).not.toBeDisabled())
+    })
+  })
+
+  // ─── Deep-link (?join=CODE) ────────────────────────────────────────────────
+
+  describe('deep-link pre-fill (?join=CODE)', () => {
+    afterEach(() => {
+      // Reset URL after each test so other suites start clean
+      window.history.replaceState({}, '', '/')
+    })
+
+    it('switches to the Join tab when ?join=CODE is in the URL', () => {
+      window.history.pushState({}, '', '/?join=ABC123')
+      render(<Home onJoin={vi.fn()} />)
+      expect(submitBtn().textContent).toBe('Join Group')
+    })
+
+    it('pre-fills the group code input from the URL param', () => {
+      window.history.pushState({}, '', '/?join=ABC123')
+      render(<Home onJoin={vi.fn()} />)
+      expect(screen.getByPlaceholderText('Enter 6-character code').value).toBe('ABC123')
+    })
+
+    it('uppercases the code from the URL param', () => {
+      window.history.pushState({}, '', '/?join=abc123')
+      render(<Home onJoin={vi.fn()} />)
+      expect(screen.getByPlaceholderText('Enter 6-character code').value).toBe('ABC123')
+    })
+
+    it('clears the ?join param from the URL after mount', () => {
+      vi.spyOn(window.history, 'replaceState')
+      window.history.pushState({}, '', '/?join=ABC123')
+      render(<Home onJoin={vi.fn()} />)
+      expect(window.history.replaceState).toHaveBeenCalledWith({}, '', '/')
+    })
+
+    it('truncates an overlong code from the URL to 6 chars', () => {
+      window.history.pushState({}, '', '/?join=ABCDEF999')
+      render(<Home onJoin={vi.fn()} />)
+      expect(screen.getByPlaceholderText('Enter 6-character code').value).toBe('ABCDEF')
+    })
+
+    it('stays on Create tab when there is no ?join param', () => {
+      render(<Home onJoin={vi.fn()} />)
+      expect(submitBtn().textContent).toBe('Create Group')
+    })
+
+    it('stays on Create tab when ?join= is empty', () => {
+      window.history.pushState({}, '', '/?join=')
+      render(<Home onJoin={vi.fn()} />)
+      expect(submitBtn().textContent).toBe('Create Group')
     })
   })
 })

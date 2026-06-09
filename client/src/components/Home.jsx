@@ -15,6 +15,17 @@ export default function Home({ onJoin }) {
   const codeInputRef = useRef(null)
   const nameInputRef = useRef(null)
 
+  // Pre-fill join tab when arriving via a share link (?join=CODE)
+  useEffect(() => {
+    const params = new URLSearchParams(window.location.search)
+    const joinCode = params.get('join')
+    if (joinCode) {
+      setTab('join')
+      setCode(joinCode.toUpperCase().slice(0, 6))
+      window.history.replaceState({}, '', '/')
+    }
+  }, [])
+
   useEffect(() => {
     function onGroupCreated({ code: groupCode, socketId }) {
       setLoading(false)

@@ -235,15 +235,17 @@ export default function GroupMap({ groupInfo, members, onLeave, isReconnecting }
       <div className={styles.topBar}>
         <div className={styles.topLeft}>
           <GroupCodeOverlay code={code} />
+        </div>
+        <div className={styles.topRight}>
           <span className={styles.memberCount}>
             {activeMemberCount} {activeMemberCount === 1 ? 'member' : 'members'}
           </span>
+          {isHost && (
+            <button className={styles.endButton} onClick={() => setShowEndConfirm(true)}>
+              End Group
+            </button>
+          )}
         </div>
-        {isHost && (
-          <button className={styles.endButton} onClick={() => setShowEndConfirm(true)}>
-            End Group
-          </button>
-        )}
       </div>
 
       {/* Compass — north-up indicator */}
