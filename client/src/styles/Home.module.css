@@ -1,16 +1,17 @@
 .container {
-  min-height: 100%;
+  height: 100%;
+  overflow-y: auto;
   display: flex;
-  align-items: center;
+  align-items: flex-start;
   justify-content: center;
   padding: 16px;
   background: linear-gradient(135deg, #0f172a 0%, #1e1b4b 100%);
-  overflow-y: auto;
 }
 
 .card {
   width: 100%;
   max-width: 420px;
+  margin: auto 0;
   background: rgba(30, 41, 59, 0.9);
   border: 1px solid rgba(99, 102, 241, 0.2);
   border-radius: 16px;
