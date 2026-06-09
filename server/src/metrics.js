@@ -1,3 +1,7 @@
+// Session logging and summary for the /api/metrics endpoint.
+// All writes are fire-and-forget — errors are silently swallowed so a logging
+// failure never impacts a user's session.
+
 import { appendFileSync, mkdirSync, existsSync, readFileSync } from 'fs'
 import { join, dirname } from 'path'
 import { fileURLToPath } from 'url'
@@ -36,6 +40,8 @@ export function parseUA(ua) {
   return { device, os, browser }
 }
 
+// Combines IP + UA into a short hash so the summary can count returning visitors
+// without storing any personally identifiable information in plaintext.
 function fingerprint(ip, ua) {
   return createHash('sha256').update(`${ip}:::${ua}`).digest('hex').slice(0, 12)
 }

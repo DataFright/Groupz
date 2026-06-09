@@ -1,12 +1,16 @@
 import { randomBytes } from 'crypto'
 import { ErrorCode, makeError } from './errorCodes.js'
 
+// Must stay in sync with ICONS in client/src/constants/icons.js.
 export const ALLOWED_ICONS = new Set([
   '🦊','🐻','🐼','🐨','🦁','🐯','🦝','🐺',
   '🦄','🐸','🐙','🦋','🌵','🌈','⚡','🔥',
   '💎','🚀','🎸','🏔️'
 ])
 
+// Validates name and icon for both create-group and join-group.
+// Returns a makeError object on failure, or null on success.
+// Control characters are blocked to prevent display exploits.
 export function validateInput(name, icon) {
   if (!name || typeof name !== 'string') return makeError(ErrorCode.INVALID_NAME, 'Name is required')
   const trimmed = name.trim()
@@ -18,6 +22,9 @@ export function validateInput(name, icon) {
   return null
 }
 
+// Generates a unique 6-character hex code (e.g. "A3F9B2").
+// Retries up to 10 times to avoid collisions in busy servers; returns null
+// on the rare chance all 10 attempts collide (practically impossible below ~16M groups).
 export function generateCode(groups) {
   for (let i = 0; i < 10; i++) {
     const code = randomBytes(3).toString('hex').toUpperCase().slice(0, 6)
@@ -26,6 +33,8 @@ export function generateCode(groups) {
   return null
 }
 
+// Returns the public member list for a group — strips internal fields
+// (lastSeen, lastLocationSeen) that clients should never see.
 export function buildMemberList(group) {
   return Object.values(group.members).map(m => ({
     socketId: m.socketId,

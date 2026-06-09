@@ -1,3 +1,6 @@
+// Shared error codes sent in join-error and REST error responses.
+// The client mirrors these in client/src/errorCodes.js — keep both in sync.
+
 export const ErrorCode = {
   INVALID_NAME:    'INVALID_NAME',
   INVALID_ICON:    'INVALID_ICON',
@@ -8,6 +11,8 @@ export const ErrorCode = {
   SERVER_ERROR:    'SERVER_ERROR',
 }
 
+// HTTP status for each error code. makeError() uses this mapping so callers
+// never need to specify a status — the code alone carries the semantic.
 const ErrorStatus = {
   [ErrorCode.INVALID_NAME]:    400,
   [ErrorCode.INVALID_ICON]:    400,

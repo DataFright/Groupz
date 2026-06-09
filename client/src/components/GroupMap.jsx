@@ -1,5 +1,9 @@
+// Fullscreen Leaflet map shown while a user is in an active group.
+// MapController is an inner component that lives inside MapContainer so it can
+// access the Leaflet map instance via useMap() and run the geolocation loop.
+
 import { useState, useEffect, useRef, useCallback } from 'react'
-import { MapContainer, TileLayer, Marker, Tooltip } from 'react-leaflet'
+import { MapContainer, TileLayer, Marker, Tooltip, useMap } from 'react-leaflet'
 import L from 'leaflet'
 import 'leaflet/dist/leaflet.css'
 import { socket } from '../socket.js'
@@ -9,28 +13,30 @@ import styles from '../styles/GroupMap.module.css'
 
 // Fix Leaflet's broken default icon paths in Vite
 import markerIcon2x from 'leaflet/dist/images/marker-icon-2x.png'
-import markerIcon from 'leaflet/dist/images/marker-icon.png'
+import markerIcon   from 'leaflet/dist/images/marker-icon.png'
 import markerShadow from 'leaflet/dist/images/marker-shadow.png'
 delete L.Icon.Default.prototype._getIconUrl
 L.Icon.Default.mergeOptions({
-  iconUrl: markerIcon,
+  iconUrl:       markerIcon,
   iconRetinaUrl: markerIcon2x,
-  shadowUrl: markerShadow
+  shadowUrl:     markerShadow,
 })
+
+// ─── Helpers ──────────────────────────────────────────────────────────────────
 
 function createEmojiIcon(icon, isMe, active, dx = 0, dy = 0) {
   const shift = (dx || dy) ? ` style="transform:translate(${dx}px,${dy}px)"` : ''
   return L.divIcon({
     className: '',
     html: `<div class="emoji-marker${isMe ? ' emoji-marker--me' : ''}${!active ? ' emoji-marker--inactive' : ''}"${shift}>${icon}</div>`,
-    iconSize: [44, 44],
-    iconAnchor: [22, 44],
-    popupAnchor: [0, -48]
+    iconSize:    [44, 44],
+    iconAnchor:  [22, 44],
+    popupAnchor: [0, -48],
   })
 }
 
 // Groups markers at the same position (within ~11m) and spreads them radially
-// so overlapping icons and tooltips don't hide each other.
+// so overlapping icons and tooltips don't obscure each other.
 function computeOverlapOffsets(members) {
   const groups = {}
   for (const m of members) {
@@ -38,14 +44,15 @@ function computeOverlapOffsets(members) {
     if (!groups[key]) groups[key] = []
     groups[key].push(m.socketId)
   }
-  const offsets = {}
-  const RADIUS = 26
+
+  const offsets  = {}
+  const RADIUS   = 26
   for (const ids of Object.values(groups)) {
     if (ids.length === 1) {
       offsets[ids[0]] = [0, 0]
     } else {
       ids.forEach((id, i) => {
-        const angle = (2 * Math.PI * i) / ids.length
+        const angle  = (2 * Math.PI * i) / ids.length
         offsets[id] = [Math.round(RADIUS * Math.cos(angle)), Math.round(RADIUS * Math.sin(angle))]
       })
     }
@@ -53,15 +60,17 @@ function computeOverlapOffsets(members) {
   return offsets
 }
 
-// Inner component that has access to the map instance via react-leaflet context.
-// Lives inside MapContainer so it can call useMap() and useEffect() with map access.
+// ─── MapController ─────────────────────────────────────────────────────────────
+// Runs the geolocation poll loop and renders member markers.
+// Must be a child of MapContainer to access the Leaflet map via useMap().
+// flyToMeRef is a ref owned by GroupMap — MapController writes a closure into it
+// so the re-center FAB can trigger map.flyTo without re-rendering this component.
+
 function MapController({ members, mySocketId, onGeoError, flyToMeRef }) {
   const hasCenteredRef = useRef(false)
-  const mapRef = useRef(null)
-  const myPosRef = useRef(null)   // last known [lat, lng] for the re-center button
+  const mapRef         = useRef(null)
+  const myPosRef       = useRef(null)
 
-  // Write a flyTo closure into the parent-owned ref so the re-center button
-  // can trigger a map animation without this component re-rendering.
   const getMap = useCallback((map) => {
     mapRef.current = map
     flyToMeRef.current = () => {
@@ -85,6 +94,7 @@ function MapController({ members, mySocketId, onGeoError, flyToMeRef }) {
           onGeoError(null)
           socket.emit('location-update', { lat, lng })
 
+          // Fly to the user's position on the first fix only
           if (!hasCenteredRef.current && mapRef.current) {
             mapRef.current.flyTo([lat, lng], 15, { duration: 1 })
             hasCenteredRef.current = true
@@ -131,23 +141,30 @@ function MapController({ members, mySocketId, onGeoError, flyToMeRef }) {
   )
 }
 
-// Utility to grab the map instance from react-leaflet context
-import { useMap } from 'react-leaflet'
+// Bridges the react-leaflet context to MapController's callback ref.
+// useMap() is only callable inside a MapContainer child, so this thin
+// wrapper extracts the map instance and passes it up via onMap().
 function SetMapRef({ onMap }) {
   const map = useMap()
   useEffect(() => { onMap(map) }, [map, onMap])
   return null
 }
 
+// ─── GroupMap ──────────────────────────────────────────────────────────────────
+
 export default function GroupMap({ groupInfo, members, onLeave, isReconnecting }) {
-  const [showMembers, setShowMembers] = useState(false)
-  const [showEndConfirm, setShowEndConfirm] = useState(false)
+  const [showMembers,      setShowMembers]      = useState(false)
+  const [showEndConfirm,   setShowEndConfirm]   = useState(false)
   const [showLeaveConfirm, setShowLeaveConfirm] = useState(false)
-  const [geoError, setGeoError] = useState(null)
-  const flyToMeRef = useRef(null)
+  const [geoError,         setGeoError]         = useState(null)
+  const flyToMeRef  = useRef(null)
   const wakeLockRef = useRef(null)
   const { code, mySocketId, isHost, hostSocketId } = groupInfo
 
+  // ─── Wake lock ─────────────────────────────────────────────────────────────
+  // Request a screen wake lock while the map is active so the phone doesn't
+  // sleep mid-trip. The browser releases the lock automatically on screen-off;
+  // we re-acquire it when the page becomes visible again (screen unlock).
   useEffect(() => {
     async function acquireWakeLock() {
       if (!navigator.wakeLock) return
@@ -172,9 +189,7 @@ export default function GroupMap({ groupInfo, members, onLeave, isReconnecting }
     }
   }, [])
 
-  function handleLeaveClick() {
-    setShowLeaveConfirm(true)
-  }
+  // ─── Actions ───────────────────────────────────────────────────────────────
 
   function confirmLeave() {
     setShowLeaveConfirm(false)
@@ -187,6 +202,8 @@ export default function GroupMap({ groupInfo, members, onLeave, isReconnecting }
   }
 
   const activeMemberCount = members.length
+
+  // ─── Render ────────────────────────────────────────────────────────────────
 
   return (
     <div className={styles.wrapper}>
@@ -211,9 +228,7 @@ export default function GroupMap({ groupInfo, members, onLeave, isReconnecting }
 
       {/* Reconnecting banner — shown while socket is re-establishing after screen lock */}
       {isReconnecting && (
-        <div className={styles.reconnecting}>
-          Reconnecting…
-        </div>
+        <div className={styles.reconnecting}>Reconnecting…</div>
       )}
 
       {/* Top bar */}
@@ -225,10 +240,7 @@ export default function GroupMap({ groupInfo, members, onLeave, isReconnecting }
           </span>
         </div>
         {isHost && (
-          <button
-            className={styles.endButton}
-            onClick={() => setShowEndConfirm(true)}
-          >
+          <button className={styles.endButton} onClick={() => setShowEndConfirm(true)}>
             End Group
           </button>
         )}
@@ -243,11 +255,17 @@ export default function GroupMap({ groupInfo, members, onLeave, isReconnecting }
       {geoError && (
         <div className={styles.geoError}>
           <span>📍 Location unavailable: {geoError}</span>
-          <button className={styles.geoErrorDismiss} onClick={() => setGeoError(null)} aria-label="Dismiss location error">✕</button>
+          <button
+            className={styles.geoErrorDismiss}
+            onClick={() => setGeoError(null)}
+            aria-label="Dismiss location error"
+          >
+            ✕
+          </button>
         </div>
       )}
 
-      {/* Bottom-right controls */}
+      {/* Bottom-right FABs */}
       <div className={styles.bottomRight}>
         <button
           className={styles.fab}
@@ -265,14 +283,14 @@ export default function GroupMap({ groupInfo, members, onLeave, isReconnecting }
         </button>
         <button
           className={`${styles.fab} ${styles.fabLeave}`}
-          onClick={handleLeaveClick}
+          onClick={() => setShowLeaveConfirm(true)}
           aria-label="Leave"
         >
           🚪
         </button>
       </div>
 
-      {/* Member list drawer */}
+      {/* Members drawer */}
       <MemberList
         isOpen={showMembers}
         onClose={() => setShowMembers(false)}
@@ -282,27 +300,35 @@ export default function GroupMap({ groupInfo, members, onLeave, isReconnecting }
         isHost={isHost}
       />
 
-      {/* End group confirmation */}
+      {/* End Group confirmation */}
       {showEndConfirm && (
         <div className={styles.overlay}>
           <div className={styles.dialog}>
             <p>End this group for everyone?</p>
             <div className={styles.dialogButtons}>
-              <button className={styles.dialogCancel} onClick={() => setShowEndConfirm(false)}>Cancel</button>
-              <button className={styles.dialogConfirm} onClick={confirmEnd}>End Group</button>
+              <button className={styles.dialogCancel} onClick={() => setShowEndConfirm(false)}>
+                Cancel
+              </button>
+              <button className={styles.dialogConfirm} onClick={confirmEnd}>
+                End Group
+              </button>
             </div>
           </div>
         </div>
       )}
 
-      {/* Leave confirmation */}
+      {/* Leave Group confirmation */}
       {showLeaveConfirm && (
         <div className={styles.overlay}>
           <div className={styles.dialog}>
             <p>Leave this group?</p>
             <div className={styles.dialogButtons}>
-              <button className={styles.dialogCancel} onClick={() => setShowLeaveConfirm(false)}>Cancel</button>
-              <button className={styles.dialogConfirm} onClick={confirmLeave}>Leave</button>
+              <button className={styles.dialogCancel} onClick={() => setShowLeaveConfirm(false)}>
+                Cancel
+              </button>
+              <button className={styles.dialogConfirm} onClick={confirmLeave}>
+                Leave
+              </button>
             </div>
           </div>
         </div>

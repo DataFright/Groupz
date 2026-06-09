@@ -85,7 +85,8 @@ export default function Home({ onJoin }) {
       socket.emit('join-group', { code: code.trim().toUpperCase(), name: name.trim(), icon })
     }
 
-    // Timeout if server doesn't respond
+    // 8s timeout — fires just before socket.io's own 10s connection timeout
+    // so we can display a UI error before the socket gives up silently.
     const timeout = setTimeout(() => {
       setLoading(false)
       setError('Connection failed. Please try again.')

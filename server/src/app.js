@@ -1,3 +1,7 @@
+// Express + Socket.IO server.
+// All state lives in memory — no database.
+// Exported as createApp() factory so tests can spin up isolated instances.
+
 import express from 'express'
 import { createServer } from 'http'
 import { Server } from 'socket.io'
@@ -14,13 +18,19 @@ export function createApp({
   maxGroupSize = 20,
   ipRateLimits,
 } = {}) {
-  const rlCreate   = { max: ipRateLimits?.createGroup?.max ?? 100, windowMs: ipRateLimits?.createGroup?.windowMs ?? 3_600_000 }
-  const rlJoin     = { max: ipRateLimits?.joinGroup?.max  ?? 300, windowMs: ipRateLimits?.joinGroup?.windowMs  ?? 3_600_000 }
-  const rlLookup   = { max: ipRateLimits?.lookup?.max ?? 60, windowMs: ipRateLimits?.lookup?.windowMs ?? 60_000 }
+
+  // ─── Rate limiting ─────────────────────────────────────────────────────────
+
+  const rlCreate = { max: ipRateLimits?.createGroup?.max ?? 100, windowMs: ipRateLimits?.createGroup?.windowMs ?? 3_600_000 }
+  const rlJoin   = { max: ipRateLimits?.joinGroup?.max  ?? 300, windowMs: ipRateLimits?.joinGroup?.windowMs  ?? 3_600_000 }
+  const rlLookup = { max: ipRateLimits?.lookup?.max ?? 60,      windowMs: ipRateLimits?.lookup?.windowMs     ?? 60_000 }
+
   const ipCreateLimits = new Map()
   const ipJoinLimits   = new Map()
   const ipLookupLimits = new Map()
 
+  // Checks whether the IP is within its rate limit window. Returns true (allow)
+  // or false (block). Automatically resets the window when it expires.
   function checkRateLimit(map, ip, { max, windowMs }) {
     const now = Date.now()
     const entry = map.get(ip) ?? { count: 0, windowStart: now }
@@ -34,10 +44,19 @@ export function createApp({
     return true
   }
 
+  // Removes IPs whose rate-limit window has expired, preventing unbounded growth.
+  function expireRateLimitMap(map, windowMs, now) {
+    for (const [ip, entry] of map) {
+      if (now - entry.windowStart > windowMs) map.delete(ip)
+    }
+  }
+
   function getIp(socket) {
     return socket.handshake.headers['x-forwarded-for']?.split(',')[0].trim()
       || socket.handshake.address
   }
+
+  // ─── App setup ─────────────────────────────────────────────────────────────
 
   const groups = {}
   const socketToGroup = {}
@@ -53,7 +72,7 @@ export function createApp({
     cors: { origin: corsOrigin, methods: ['GET', 'POST'] }
   })
 
-  // --- REST endpoints ---
+  // ─── REST endpoints ────────────────────────────────────────────────────────
 
   app.get('/health', (_req, res) => {
     res.status(200).json({
@@ -90,20 +109,15 @@ export function createApp({
     res.json(getSummary())
   })
 
-  // --- Inactivity cleanup (every 60s) ---
+  // ─── Cleanup interval (every 60s) ─────────────────────────────────────────
 
   const cleanupTimer = setInterval(() => {
     const now = Date.now()
 
-    for (const [ip, entry] of ipCreateLimits) {
-      if (now - entry.windowStart > rlCreate.windowMs) ipCreateLimits.delete(ip)
-    }
-    for (const [ip, entry] of ipJoinLimits) {
-      if (now - entry.windowStart > rlJoin.windowMs) ipJoinLimits.delete(ip)
-    }
-    for (const [ip, entry] of ipLookupLimits) {
-      if (now - entry.windowStart > rlLookup.windowMs) ipLookupLimits.delete(ip)
-    }
+    // Expire stale rate-limit entries so the maps don't grow indefinitely
+    expireRateLimitMap(ipCreateLimits, rlCreate.windowMs, now)
+    expireRateLimitMap(ipJoinLimits,   rlJoin.windowMs,   now)
+    expireRateLimitMap(ipLookupLimits, rlLookup.windowMs, now)
 
     for (const [code, group] of Object.entries(groups)) {
       // Remove members not seen in 3 min — covers stuck/zombie sockets that
@@ -162,7 +176,7 @@ export function createApp({
     }
   }, cleanupIntervalMs)
 
-  // --- Socket.IO ---
+  // ─── Socket.IO event handlers ──────────────────────────────────────────────
 
   io.on('connection', (socket) => {
     sessionStart(socket)
@@ -318,6 +332,10 @@ export function createApp({
 
     socket.on('disconnect', () => { sessionEnd(socket.id); handleLeave(socket, true) })
   })
+
+  // ─── handleLeave ───────────────────────────────────────────────────────────
+  // Shared by leave-group (voluntary) and disconnect (unexpected).
+  // isDisconnect=true keeps the group alive briefly so the member can reconnect.
 
   function handleLeave(socket, isDisconnect) {
     const code = socketToGroup[socket.id]

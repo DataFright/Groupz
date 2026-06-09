@@ -1,46 +1,62 @@
+// Root component: owns all socket listeners and view-routing state.
+// Only two views: 'home' (the join/create form) and 'map' (the live group map).
+
 import { useState, useEffect, useRef } from 'react'
 import { socket } from './socket.js'
+import { ErrorCode } from './errorCodes.js'
 import Home from './components/Home.jsx'
 import GroupMap from './components/GroupMap.jsx'
+import styles from './styles/App.module.css'
 
 export default function App() {
-  const [view, setView] = useState('home')
-  const [groupInfo, setGroupInfo] = useState(null)
-  const [members, setMembers] = useState([])
+  const [view, setView]               = useState('home')
+  const [groupInfo, setGroupInfo]     = useState(null)
+  const [members, setMembers]         = useState([])
   const [notification, setNotification] = useState('')
   const [isReconnecting, setIsReconnecting] = useState(false)
 
-  const pendingRejoinRef = useRef(null)
-  const isRejoiningRef = useRef(false)
+  // groupInfoRef mirrors groupInfo so the disconnect handler can read the
+  // current group without being re-registered every time groupInfo changes.
   const groupInfoRef = useRef(null)
   useEffect(() => { groupInfoRef.current = groupInfo }, [groupInfo])
 
+  // pendingRejoinRef stores groupInfo while the socket is reconnecting so
+  // onConnect can re-emit join-group with the original code/name/icon.
+  const pendingRejoinRef = useRef(null)
+
+  // isRejoiningRef gates onReconnectConfirmed and onReconnectError so the
+  // normal first-time join-confirmed from Home.jsx is not misread as a rejoin.
+  const isRejoiningRef = useRef(false)
+
   useEffect(() => {
+    // Resets all group state and returns to the home screen.
+    // Accepts an optional notification message to show after navigating home.
+    function goHome(msg = '') {
+      setView('home')
+      setGroupInfo(null)
+      setMembers([])
+      if (msg) setNotification(msg)
+    }
+
+    // ─── Group lifecycle ───────────────────────────────────────────────────
+
     function onMembersUpdate(list) {
       setMembers(list)
     }
 
     function onRemovedFromGroup() {
-      setView('home')
-      setGroupInfo(null)
-      setMembers([])
       socket.disconnect()
-      setNotification('You were removed from the group by the host.')
+      goHome('You were removed from the group by the host.')
     }
 
     function onGroupEnded() {
-      setView('home')
-      setGroupInfo(null)
-      setMembers([])
       socket.disconnect()
-      setNotification('The group was ended by the host.')
+      goHome('The group was ended by the host.')
     }
 
     function onLeftGroup() {
-      setView('home')
-      setGroupInfo(null)
-      setMembers([])
       socket.disconnect()
+      goHome()
     }
 
     function onHostChanged({ newHostSocketId }) {
@@ -50,9 +66,13 @@ export default function App() {
       )
     }
 
-    // 'io client disconnect' = intentional (we called socket.disconnect()); skip.
-    // Anything else = unexpected drop — if on the map, enter reconnecting state.
+    // ─── Reconnect flow ────────────────────────────────────────────────────
+    // When the socket drops unexpectedly (screen lock, network blip), we store
+    // the current group info and show a reconnecting banner instead of going home.
+    // On reconnect, we silently re-emit join-group to resume the session.
+
     function onDisconnect(reason) {
+      // 'io client disconnect' = we called socket.disconnect() intentionally; skip.
       if (reason === 'io client disconnect') return
       const current = groupInfoRef.current
       if (current) {
@@ -77,7 +97,9 @@ export default function App() {
       })
     }
 
-    // join-confirmed after a reconnect rejoin — update socket ID and clear banner.
+    // join-confirmed after a reconnect rejoin — update the socket ID (it changed)
+    // and clear the reconnecting banner. Guarded by isRejoiningRef so first-time
+    // join-confirmed events from Home.jsx are ignored here.
     function onReconnectConfirmed({ socketId, hostSocketId }) {
       if (!isRejoiningRef.current) return
       isRejoiningRef.current = false
@@ -95,10 +117,7 @@ export default function App() {
       pendingRejoinRef.current = null
       isRejoiningRef.current = false
       setIsReconnecting(false)
-      setView('home')
-      setGroupInfo(null)
-      setMembers([])
-      setNotification('Could not reconnect. Please rejoin the group.')
+      goHome('Could not reconnect. Please rejoin the group.')
     }
 
     // join-error during a reconnect rejoin (e.g. group was deleted while offline).
@@ -107,45 +126,45 @@ export default function App() {
       isRejoiningRef.current = false
       pendingRejoinRef.current = null
       setIsReconnecting(false)
-      setView('home')
-      setGroupInfo(null)
-      setMembers([])
-      const msg = errCode === 'GROUP_NOT_FOUND'
+      const msg = errCode === ErrorCode.GROUP_NOT_FOUND
         ? 'Your group ended while you were away.'
         : 'Could not rejoin the group. Please try again.'
-      setNotification(msg)
+      goHome(msg)
     }
 
-    // Page Visibility API — kick off reconnect immediately when screen unlocks.
+    // Page Visibility API — kick off reconnect immediately on screen unlock
+    // rather than waiting for the next Socket.IO retry interval.
     function onVisibilityChange() {
       if (document.visibilityState === 'visible' && !socket.connected && pendingRejoinRef.current) {
         socket.connect()
       }
     }
 
-    socket.on('members-update', onMembersUpdate)
+    // ─── Register / deregister ─────────────────────────────────────────────
+
+    socket.on('members-update',     onMembersUpdate)
     socket.on('removed-from-group', onRemovedFromGroup)
-    socket.on('group-ended', onGroupEnded)
-    socket.on('left-group', onLeftGroup)
-    socket.on('host-changed', onHostChanged)
-    socket.on('disconnect', onDisconnect)
-    socket.on('connect', onConnect)
-    socket.on('join-confirmed', onReconnectConfirmed)
-    socket.on('join-error', onReconnectError)
-    socket.on('reconnect_failed', onReconnectFailed)
+    socket.on('group-ended',        onGroupEnded)
+    socket.on('left-group',         onLeftGroup)
+    socket.on('host-changed',       onHostChanged)
+    socket.on('disconnect',         onDisconnect)
+    socket.on('connect',            onConnect)
+    socket.on('join-confirmed',     onReconnectConfirmed)
+    socket.on('join-error',         onReconnectError)
+    socket.on('reconnect_failed',   onReconnectFailed)
     document.addEventListener('visibilitychange', onVisibilityChange)
 
     return () => {
-      socket.off('members-update', onMembersUpdate)
+      socket.off('members-update',     onMembersUpdate)
       socket.off('removed-from-group', onRemovedFromGroup)
-      socket.off('group-ended', onGroupEnded)
-      socket.off('left-group', onLeftGroup)
-      socket.off('host-changed', onHostChanged)
-      socket.off('disconnect', onDisconnect)
-      socket.off('connect', onConnect)
-      socket.off('join-confirmed', onReconnectConfirmed)
-      socket.off('join-error', onReconnectError)
-      socket.off('reconnect_failed', onReconnectFailed)
+      socket.off('group-ended',        onGroupEnded)
+      socket.off('left-group',         onLeftGroup)
+      socket.off('host-changed',       onHostChanged)
+      socket.off('disconnect',         onDisconnect)
+      socket.off('connect',            onConnect)
+      socket.off('join-confirmed',     onReconnectConfirmed)
+      socket.off('join-error',         onReconnectError)
+      socket.off('reconnect_failed',   onReconnectFailed)
       document.removeEventListener('visibilitychange', onVisibilityChange)
     }
   }, [])
@@ -162,21 +181,18 @@ export default function App() {
   return (
     <>
       {notification && (
-        <div
-          style={{
-            position: 'fixed', top: 0, left: 0, right: 0, zIndex: 9999,
-            background: '#ef4444', color: '#fff', textAlign: 'center',
-            padding: '12px 16px', fontSize: '14px', fontWeight: 500,
-            cursor: 'pointer'
-          }}
-          onClick={() => setNotification('')}
-        >
+        <div className={styles.notification} onClick={() => setNotification('')}>
           {notification} (tap to dismiss)
         </div>
       )}
       {view === 'home'
         ? <Home onJoin={handleJoin} />
-        : <GroupMap groupInfo={groupInfo} members={members} onLeave={handleLeave} isReconnecting={isReconnecting} />
+        : <GroupMap
+            groupInfo={groupInfo}
+            members={members}
+            onLeave={handleLeave}
+            isReconnecting={isReconnecting}
+          />
       }
     </>
   )
