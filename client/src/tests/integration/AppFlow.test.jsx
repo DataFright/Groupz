@@ -22,11 +22,13 @@ vi.mock('../../socket.js', () => ({
 }))
 
 vi.mock('../../components/GroupMap.jsx', () => ({
-  default: ({ groupInfo }) =>
+  default: ({ groupInfo, members, isReconnecting }) =>
     React.createElement('div', {
-      'data-testid': 'group-map',
-      'data-code':   groupInfo?.code,
-      'data-host':   String(groupInfo?.isHost),
+      'data-testid':        'group-map',
+      'data-code':          groupInfo?.code,
+      'data-host':          String(groupInfo?.isHost),
+      'data-reconnecting':  String(isReconnecting),
+      'data-member-count':  String(members?.length ?? 0),
     })
 }))
 
@@ -174,5 +176,164 @@ describe('Integration tests — App view routing', () => {
       expect(screen.queryByTestId('group-map')).not.toBeInTheDocument()
     )
     expect(screen.getByText('Groupz')).toBeInTheDocument()
+  })
+
+  it('unexpected disconnect while on map stays on map with isReconnecting=true', async () => {
+    render(<App />)
+    act(() => {
+      handlers['group-created']?.forEach(h =>
+        h({ code: 'ABCDEF', socketId: 'test-socket-1', status: 201 })
+      )
+    })
+    await waitFor(() => expect(screen.getByTestId('group-map')).toBeInTheDocument())
+
+    trigger('disconnect', 'transport close')
+
+    await waitFor(() => {
+      const map = screen.getByTestId('group-map')
+      expect(map).toBeInTheDocument()
+      expect(map.dataset.reconnecting).toBe('true')
+    })
+  })
+
+  it('connect after disconnect emits join-group; join-confirmed clears reconnecting', async () => {
+    render(<App />)
+    act(() => {
+      handlers['group-created']?.forEach(h =>
+        h({ code: 'ABCDEF', socketId: 'test-socket-1', status: 201 })
+      )
+    })
+    await waitFor(() => expect(screen.getByTestId('group-map')).toBeInTheDocument())
+
+    trigger('disconnect', 'transport close')
+    await waitFor(() => expect(screen.getByTestId('group-map').dataset.reconnecting).toBe('true'))
+
+    trigger('connect')
+    expect(socket.emit).toHaveBeenCalledWith('join-group', expect.objectContaining({ code: 'ABCDEF' }))
+
+    trigger('join-confirmed', { socketId: 'test-socket-2', hostSocketId: 'test-socket-2' })
+    await waitFor(() => expect(screen.getByTestId('group-map').dataset.reconnecting).toBe('false'))
+  })
+
+  it('reconnect_failed sends user home with a notification', async () => {
+    render(<App />)
+    act(() => {
+      handlers['group-created']?.forEach(h =>
+        h({ code: 'ABCDEF', socketId: 'test-socket-1', status: 201 })
+      )
+    })
+    await waitFor(() => expect(screen.getByTestId('group-map')).toBeInTheDocument())
+
+    trigger('disconnect', 'transport close')
+    trigger('reconnect_failed')
+
+    await waitFor(() => expect(screen.queryByTestId('group-map')).not.toBeInTheDocument())
+    expect(screen.getByText(/could not reconnect/i)).toBeInTheDocument()
+  })
+
+  it('join-error GROUP_NOT_FOUND during rejoin shows group-ended message and goes home', async () => {
+    render(<App />)
+    act(() => {
+      handlers['group-created']?.forEach(h =>
+        h({ code: 'ABCDEF', socketId: 'test-socket-1', status: 201 })
+      )
+    })
+    await waitFor(() => expect(screen.getByTestId('group-map')).toBeInTheDocument())
+
+    trigger('disconnect', 'transport close')
+    await waitFor(() => expect(screen.getByTestId('group-map').dataset.reconnecting).toBe('true'))
+
+    trigger('connect')
+    trigger('join-error', { code: 'GROUP_NOT_FOUND' })
+
+    await waitFor(() => expect(screen.queryByTestId('group-map')).not.toBeInTheDocument())
+    expect(screen.getByText(/group ended while you were away/i)).toBeInTheDocument()
+  })
+
+  it('join-confirmed while not in a reconnect flow is ignored — map unchanged', async () => {
+    render(<App />)
+    act(() => {
+      handlers['group-created']?.forEach(h =>
+        h({ code: 'ABCDEF', socketId: 'test-socket-1', status: 201 })
+      )
+    })
+    await waitFor(() => expect(screen.getByTestId('group-map')).toBeInTheDocument())
+
+    // No disconnect — isRejoiningRef is false
+    trigger('join-confirmed', { socketId: 'other-socket', hostSocketId: 'other-socket' })
+
+    await new Promise(r => setTimeout(r, 50))
+    expect(screen.getByTestId('group-map')).toBeInTheDocument()
+    expect(screen.getByTestId('group-map').dataset.reconnecting).toBe('false')
+  })
+
+  it('join-error while not in a reconnect flow is ignored — map unchanged', async () => {
+    render(<App />)
+    act(() => {
+      handlers['group-created']?.forEach(h =>
+        h({ code: 'ABCDEF', socketId: 'test-socket-1', status: 201 })
+      )
+    })
+    await waitFor(() => expect(screen.getByTestId('group-map')).toBeInTheDocument())
+
+    // No disconnect — isRejoiningRef is false
+    trigger('join-error', { code: 'GROUP_NOT_FOUND' })
+
+    await new Promise(r => setTimeout(r, 50))
+    expect(screen.getByTestId('group-map')).toBeInTheDocument()
+    expect(screen.queryByText(/group ended/i)).not.toBeInTheDocument()
+  })
+
+  it('intentional disconnect reason does not trigger reconnecting state', async () => {
+    render(<App />)
+    act(() => {
+      handlers['group-created']?.forEach(h =>
+        h({ code: 'ABCDEF', socketId: 'test-socket-1', status: 201 })
+      )
+    })
+    await waitFor(() => expect(screen.getByTestId('group-map')).toBeInTheDocument())
+
+    trigger('disconnect', 'io client disconnect')
+
+    await new Promise(r => setTimeout(r, 50))
+    expect(screen.getByTestId('group-map')).toBeInTheDocument()
+    expect(screen.getByTestId('group-map').dataset.reconnecting).toBe('false')
+  })
+
+  it('visibilitychange while disconnected with pending rejoin triggers socket.connect', async () => {
+    render(<App />)
+    act(() => {
+      handlers['group-created']?.forEach(h =>
+        h({ code: 'ABCDEF', socketId: 'test-socket-1', status: 201 })
+      )
+    })
+    await waitFor(() => expect(screen.getByTestId('group-map')).toBeInTheDocument())
+
+    trigger('disconnect', 'transport close')
+    await waitFor(() => expect(screen.getByTestId('group-map').dataset.reconnecting).toBe('true'))
+
+    // socket.connected is undefined (falsy) on the mock; visibilityState defaults to 'visible' in jsdom
+    act(() => document.dispatchEvent(new Event('visibilitychange')))
+
+    expect(socket.connect).toHaveBeenCalled()
+  })
+
+  it('members-update event updates the member count passed to GroupMap', async () => {
+    render(<App />)
+    act(() => {
+      handlers['group-created']?.forEach(h =>
+        h({ code: 'ABCDEF', socketId: 'test-socket-1', status: 201 })
+      )
+    })
+    await waitFor(() => expect(screen.getByTestId('group-map')).toBeInTheDocument())
+
+    trigger('members-update', [
+      { socketId: 'test-socket-1', name: 'Alice', icon: '🦊', lat: null, lng: null, active: true },
+      { socketId: 'test-socket-2', name: 'Bob',   icon: '🐻', lat: null, lng: null, active: true },
+    ])
+
+    await waitFor(() =>
+      expect(screen.getByTestId('group-map').dataset.memberCount).toBe('2')
+    )
   })
 })

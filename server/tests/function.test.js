@@ -112,6 +112,22 @@ describe('Function tests — socket event handlers', () => {
       await new Promise(r => setTimeout(r, 100))
       expect(Object.keys(groups)).toHaveLength(0)
     })
+
+    it('emits join-error INVALID_NAME for name with control characters', async () => {
+      const c = await connect(serverUrl)
+      const p = once(c, 'join-error')
+      c.emit('create-group', { name: 'Alice\nBob', icon: '🦊' })
+      const err = await p
+      expect(err.code).toBe(ErrorCode.INVALID_NAME)
+    })
+
+    it('emits join-error INVALID_NAME when called with no payload', async () => {
+      const c = await connect(serverUrl)
+      const p = once(c, 'join-error')
+      c.emit('create-group')
+      const err = await p
+      expect(err.code).toBe(ErrorCode.INVALID_NAME)
+    })
   })
 
   // ─── join-group ────────────────────────────────────────────────────────────
@@ -165,6 +181,32 @@ describe('Function tests — socket event handlers', () => {
       const joiner = await connect(serverUrl)
       await joinGroup(joiner, code)
       expect(groups[code].members[joiner.id]).toBeDefined()
+    })
+
+    it('emits CODE_REQUIRED when code is a number instead of a string', async () => {
+      const c = await connect(serverUrl)
+      const p = once(c, 'join-error')
+      c.emit('join-group', { code: 123456, name: 'Bob', icon: '🐻' })
+      const err = await p
+      expect(err.code).toBe(ErrorCode.CODE_REQUIRED)
+    })
+
+    it('emits CODE_REQUIRED when code field is absent', async () => {
+      const c = await connect(serverUrl)
+      const p = once(c, 'join-error')
+      c.emit('join-group', { name: 'Bob', icon: '🐻' })
+      const err = await p
+      expect(err.code).toBe(ErrorCode.CODE_REQUIRED)
+    })
+
+    it('emits INVALID_NAME for name with control characters', async () => {
+      const host = await connect(serverUrl)
+      const { code } = await createGroup(host)
+      const c = await connect(serverUrl)
+      const p = once(c, 'join-error')
+      c.emit('join-group', { code, name: 'Bob\x1f', icon: '🐻' })
+      const err = await p
+      expect(err.code).toBe(ErrorCode.INVALID_NAME)
     })
   })
 
@@ -231,6 +273,30 @@ describe('Function tests — socket event handlers', () => {
       c.emit('location-update', { lat: 10, lng: 10 })
       await new Promise(r => setTimeout(r, 100))
       expect(Object.keys(groups)).toHaveLength(0)
+    })
+
+    it('silently ignores Infinity latitude', async () => {
+      const c = await connect(serverUrl)
+      const { code } = await createGroup(c)
+      c.emit('location-update', { lat: Infinity, lng: 0 })
+      await new Promise(r => setTimeout(r, 100))
+      expect(groups[code].members[c.id].lat).toBeNull()
+    })
+
+    it('silently ignores a missing lng field', async () => {
+      const c = await connect(serverUrl)
+      const { code } = await createGroup(c)
+      c.emit('location-update', { lat: 51.5 })
+      await new Promise(r => setTimeout(r, 100))
+      expect(groups[code].members[c.id].lat).toBeNull()
+    })
+
+    it('silently ignores an entirely empty payload', async () => {
+      const c = await connect(serverUrl)
+      const { code } = await createGroup(c)
+      c.emit('location-update', {})
+      await new Promise(r => setTimeout(r, 100))
+      expect(groups[code].members[c.id].lat).toBeNull()
     })
 
     // ── Rate limiting ──────────────────────────────────────────────────────────
@@ -314,6 +380,14 @@ describe('Function tests — socket event handlers', () => {
       await p
       expect(socketToGroup[c.id]).toBeUndefined()
     })
+
+    it('is a no-op when the socket is not in any group', async () => {
+      const c = await connect(serverUrl)
+      // No create-group or join-group — leave-group should not throw or emit anything
+      c.emit('leave-group')
+      await new Promise(r => setTimeout(r, 100))
+      expect(Object.keys(groups)).toHaveLength(0)
+    })
   })
 
   // ─── remove-member ─────────────────────────────────────────────────────────
@@ -353,6 +427,37 @@ describe('Function tests — socket event handlers', () => {
       await new Promise(r => setTimeout(r, 100))
       expect(groups[code].members[host.id]).toBeDefined()
     })
+
+    it('silently ignores attempt to remove a member who already left', async () => {
+      const host = await connect(serverUrl)
+      const { code } = await createGroup(host)
+      const member = await connect(serverUrl)
+      await joinGroup(member, code)
+      const memberId = member.id
+
+      await new Promise(resolve => {
+        member.once('left-group', resolve)
+        member.emit('leave-group')
+      })
+      // Drain the members-update that fires when member leaves
+      await new Promise(r => setTimeout(r, 50))
+
+      host.emit('remove-member', { targetSocketId: memberId })
+      await new Promise(r => setTimeout(r, 100))
+      expect(groups[code]).toBeDefined()
+      expect(groups[code].members[host.id]).toBeDefined()
+    })
+
+    it('silently ignores remove-member with no targetSocketId', async () => {
+      const host = await connect(serverUrl)
+      const { code } = await createGroup(host)
+      const member = await connect(serverUrl)
+      await joinGroup(member, code)
+
+      host.emit('remove-member', {})
+      await new Promise(r => setTimeout(r, 100))
+      expect(Object.keys(groups[code].members)).toHaveLength(2)
+    })
   })
 
   // ─── end-group ─────────────────────────────────────────────────────────────
@@ -378,6 +483,85 @@ describe('Function tests — socket event handlers', () => {
       member.emit('end-group')
       await new Promise(r => setTimeout(r, 100))
       expect(groups[code]).toBeDefined()
+    })
+
+    it('clears socketToGroup for every member when the group ends', async () => {
+      const host = await connect(serverUrl)
+      const { code } = await createGroup(host)
+      const member = await connect(serverUrl)
+      await joinGroup(member, code)
+      const hostId = host.id
+      const memberId = member.id
+
+      const p = once(host, 'group-ended')
+      host.emit('end-group')
+      await p
+
+      expect(socketToGroup[hostId]).toBeUndefined()
+      expect(socketToGroup[memberId]).toBeUndefined()
+    })
+
+    it('is a no-op when the socket is not in any group', async () => {
+      const c = await connect(serverUrl)
+      c.emit('end-group')
+      await new Promise(r => setTimeout(r, 100))
+      expect(Object.keys(groups)).toHaveLength(0)
+    })
+  })
+
+  // ─── disconnect ───────────────────────────────────────────────────────────
+
+  describe('disconnect', () => {
+    it('when the host disconnects, remaining members receive host-changed', async () => {
+      const host = await connect(serverUrl)
+      const { code } = await createGroup(host)
+      const member = await connect(serverUrl)
+      await joinGroup(member, code)
+
+      const p = once(member, 'host-changed')
+      host.disconnect()
+      const { newHostSocketId } = await p
+      expect(newHostSocketId).toBe(member.id)
+      expect(groups[code].hostSocketId).toBe(member.id)
+    })
+
+    it('when the last member disconnects, the group is deleted', async () => {
+      const c = await connect(serverUrl)
+      const { code } = await createGroup(c)
+
+      await new Promise(resolve => {
+        c.once('disconnect', resolve)
+        c.disconnect()
+      })
+      await new Promise(r => setTimeout(r, 100))
+
+      expect(groups[code]).toBeUndefined()
+      expect(socketToGroup[c.id]).toBeUndefined()
+    })
+
+    it('disconnect of a socket not in any group is a no-op', async () => {
+      const c = await connect(serverUrl)
+      await new Promise(resolve => {
+        c.once('disconnect', resolve)
+        c.disconnect()
+      })
+      await new Promise(r => setTimeout(r, 100))
+      expect(Object.keys(groups)).toHaveLength(0)
+    })
+
+    it('remaining members receive a members-update after host disconnects', async () => {
+      const host = await connect(serverUrl)
+      const { code } = await createGroup(host)
+      const member = await connect(serverUrl)
+      await joinGroup(member, code)
+
+      // Drain the join members-update before testing
+      await new Promise(r => setTimeout(r, 50))
+
+      const p = once(member, 'members-update')
+      host.disconnect()
+      const list = await p
+      expect(list.find(m => m.socketId === host.id)).toBeUndefined()
     })
   })
 
@@ -550,5 +734,35 @@ describe('IP rate limiting', () => {
     const err = await p
     expect(err.code).toBe(ErrorCode.RATE_LIMITED)
     expect(err.status).toBe(429)
+  })
+})
+
+// ─── REST API — lookup rate limiting ──────────────────────────────────────────
+
+describe('REST API — lookup rate limiting', () => {
+  let httpServer, io, cleanupTimer, serverUrl
+
+  beforeAll(async () => {
+    ;({ httpServer, io, cleanupTimer } = createApp({
+      corsOrigin: '*',
+      ipRateLimits: { lookup: { max: 2, windowMs: 60_000 } },
+    }))
+    await new Promise(resolve => httpServer.listen(0, resolve))
+    serverUrl = `http://localhost:${httpServer.address().port}`
+  })
+
+  afterAll(async () => {
+    clearInterval(cleanupTimer)
+    await new Promise(resolve => io.close(resolve))
+    await new Promise(resolve => httpServer.close(resolve))
+  })
+
+  it('returns 429 after exceeding the lookup rate limit', async () => {
+    await fetch(`${serverUrl}/api/groups/XXXXXX`)
+    await fetch(`${serverUrl}/api/groups/XXXXXX`)
+    const res = await fetch(`${serverUrl}/api/groups/XXXXXX`)
+    expect(res.status).toBe(429)
+    const body = await res.json()
+    expect(body.error).toBeDefined()
   })
 })

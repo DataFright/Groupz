@@ -139,7 +139,7 @@ function SetMapRef({ onMap }) {
   return null
 }
 
-export default function GroupMap({ groupInfo, members, onLeave }) {
+export default function GroupMap({ groupInfo, members, onLeave, isReconnecting }) {
   const [showMembers, setShowMembers] = useState(false)
   const [showEndConfirm, setShowEndConfirm] = useState(false)
   const [showLeaveConfirm, setShowLeaveConfirm] = useState(false)
@@ -183,6 +183,13 @@ export default function GroupMap({ groupInfo, members, onLeave }) {
           flyToMeRef={flyToMeRef}
         />
       </MapContainer>
+
+      {/* Reconnecting banner — shown while socket is re-establishing after screen lock */}
+      {isReconnecting && (
+        <div className={styles.reconnecting}>
+          Reconnecting…
+        </div>
+      )}
 
       {/* Top bar */}
       <div className={styles.topBar}>

@@ -12,6 +12,7 @@ export function validateInput(name, icon) {
   const trimmed = name.trim()
   if (trimmed.length === 0) return makeError(ErrorCode.INVALID_NAME, 'Name is required')
   if (trimmed.length > 16)  return makeError(ErrorCode.INVALID_NAME, 'Name must be 1–16 characters')
+  if (/[\x00-\x1f\x7f]/.test(trimmed)) return makeError(ErrorCode.INVALID_NAME, 'Name contains invalid characters')
   if (!icon || !ALLOWED_ICONS.has(icon)) return makeError(ErrorCode.INVALID_ICON, 'Invalid icon selection')
   return null
 }

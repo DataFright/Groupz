@@ -39,6 +39,22 @@ describe('validateInput — name validation', () => {
   it('returns INVALID_NAME for non-string name', () => {
     expect(validateInput(42, '🦊').code).toBe(ErrorCode.INVALID_NAME)
   })
+
+  it('returns INVALID_NAME for name containing a newline', () => {
+    expect(validateInput('Alice\nBob', '🦊').code).toBe(ErrorCode.INVALID_NAME)
+  })
+
+  it('returns INVALID_NAME for name containing a tab', () => {
+    expect(validateInput('Alice\tBob', '🦊').code).toBe(ErrorCode.INVALID_NAME)
+  })
+
+  it('returns INVALID_NAME for name with a null byte', () => {
+    expect(validateInput('Alice\x00', '🦊').code).toBe(ErrorCode.INVALID_NAME)
+  })
+
+  it('returns INVALID_NAME for name with a carriage return', () => {
+    expect(validateInput('Alice\rBob', '🦊').code).toBe(ErrorCode.INVALID_NAME)
+  })
 })
 
 // ─── validateInput — icon validation ─────────────────────────────────────────
@@ -56,6 +72,10 @@ describe('validateInput — icon validation', () => {
 
   it('returns INVALID_ICON for null icon', () => {
     expect(validateInput('Alice', null).code).toBe(ErrorCode.INVALID_ICON)
+  })
+
+  it('returns INVALID_ICON for a doubled emoji that is not in the allowed set', () => {
+    expect(validateInput('Alice', '🦊🦊').code).toBe(ErrorCode.INVALID_ICON)
   })
 
   it('accepts every icon in ALLOWED_ICONS', () => {
@@ -143,6 +163,18 @@ describe('buildMemberList', () => {
       }
     }
     expect(buildMemberList(group)[0].active).toBe(false)
+  })
+
+  it('does not expose internal lastSeen or lastLocationSeen fields', () => {
+    const group = {
+      members: {
+        's1': { socketId: 's1', name: 'Alice', icon: '🦊', lat: null, lng: null, active: true,
+                lastSeen: Date.now(), lastLocationSeen: 0 }
+      }
+    }
+    const [member] = buildMemberList(group)
+    expect(member.lastSeen).toBeUndefined()
+    expect(member.lastLocationSeen).toBeUndefined()
   })
 })
 

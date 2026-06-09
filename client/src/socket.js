@@ -5,6 +5,8 @@ const URL = import.meta.env.VITE_SOCKET_URL || ''
 export const socket = io(URL, {
   autoConnect: false,
   reconnection: true,
-  reconnectionAttempts: 5,
-  reconnectionDelay: 1000
+  reconnectionAttempts: 10,
+  reconnectionDelay: 1500,
+  reconnectionDelayMax: 8000,
+  timeout: 10000,
 })

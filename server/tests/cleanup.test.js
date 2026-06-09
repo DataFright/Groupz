@@ -2,7 +2,7 @@
  * Cleanup tests — inactivity auto-remove and host transfer via the cleanup loop.
  *
  * Uses cleanupIntervalMs: 80 so tests don't have to wait 60 seconds.
- * Each test backdates member.lastSeen by 61 s then lets the next tick remove them.
+ * Each test backdates member.lastSeen by 181 s then lets the next tick remove them.
  */
 import { describe, it, expect, beforeAll, afterAll, afterEach } from 'vitest'
 import { io as Client } from 'socket.io-client'
@@ -53,7 +53,7 @@ describe('Cleanup — auto-remove inactive members', () => {
 
   // ─── Member removal ─────────────────────────────────────────────────────────
 
-  it('removes a non-host member whose lastSeen is older than 60 s', async () => {
+  it('removes a non-host member whose lastSeen is older than 180 s', async () => {
     const host = await connect(serverUrl)
     const { code } = await new Promise(resolve => {
       host.once('group-created', resolve)
@@ -66,7 +66,7 @@ describe('Cleanup — auto-remove inactive members', () => {
       member.emit('join-group', { code, name: 'Idle', icon: '🐻' })
     })
 
-    groups[code].members[member.id].lastSeen = Date.now() - 61_000
+    groups[code].members[member.id].lastSeen = Date.now() - 181_000
 
     await new Promise(r => setTimeout(r, WAIT))
 
@@ -87,7 +87,7 @@ describe('Cleanup — auto-remove inactive members', () => {
       member.emit('join-group', { code, name: 'Idle', icon: '🐻' })
     })
 
-    groups[code].members[member.id].lastSeen = Date.now() - 61_000
+    groups[code].members[member.id].lastSeen = Date.now() - 181_000
 
     const payload = await once(member, 'removed-from-group')
     expect(payload.status).toBe(200)
@@ -109,7 +109,7 @@ describe('Cleanup — auto-remove inactive members', () => {
       Promise.resolve(idle.emit('join-group', { code, name: 'Idle', icon: '🐻' })),
     ])
 
-    groups[code].members[idle.id].lastSeen = Date.now() - 61_000
+    groups[code].members[idle.id].lastSeen = Date.now() - 181_000
     const update = await once(host, 'members-update')
 
     expect(update).toHaveLength(1)
@@ -123,7 +123,7 @@ describe('Cleanup — auto-remove inactive members', () => {
       solo.emit('create-group', { name: 'Solo', icon: '🦊' })
     })
 
-    groups[code].members[solo.id].lastSeen = Date.now() - 61_000
+    groups[code].members[solo.id].lastSeen = Date.now() - 181_000
 
     await new Promise(r => setTimeout(r, WAIT))
 
@@ -147,7 +147,7 @@ describe('Cleanup — auto-remove inactive members', () => {
     })
 
     // The host goes idle
-    groups[code].members[host.id].lastSeen = Date.now() - 61_000
+    groups[code].members[host.id].lastSeen = Date.now() - 181_000
 
     const { newHostSocketId } = await once(member, 'host-changed')
 
@@ -168,7 +168,7 @@ describe('Cleanup — auto-remove inactive members', () => {
       member.emit('join-group', { code, name: 'Member', icon: '🐻' })
     })
 
-    groups[code].members[host.id].lastSeen = Date.now() - 61_000
+    groups[code].members[host.id].lastSeen = Date.now() - 181_000
     await once(member, 'host-changed')
 
     const ended = await new Promise(resolve => {

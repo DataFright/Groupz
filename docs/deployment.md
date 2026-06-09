@@ -19,6 +19,7 @@
 | `CLIENT_ORIGIN` | `http://localhost:3000` | CORS allowed origin — set to your Vercel URL in production |
 | `RATE_LIMIT_CREATE` | `100` | Max group creates per IP per hour |
 | `RATE_LIMIT_JOIN` | `300` | Max group joins per IP per hour |
+| `METRICS_KEY` | `` (unset) | If set, the `/api/metrics` endpoint requires `?key=VALUE` |
 
 ### Client (`client/.env`)
 

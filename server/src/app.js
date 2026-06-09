@@ -16,7 +16,7 @@ export function createApp({
 } = {}) {
   const rlCreate   = { max: ipRateLimits?.createGroup?.max ?? 100, windowMs: ipRateLimits?.createGroup?.windowMs ?? 3_600_000 }
   const rlJoin     = { max: ipRateLimits?.joinGroup?.max  ?? 300, windowMs: ipRateLimits?.joinGroup?.windowMs  ?? 3_600_000 }
-  const rlLookup   = { max: 60, windowMs: 60_000 }   // 60 group lookups per minute per IP
+  const rlLookup   = { max: ipRateLimits?.lookup?.max ?? 60, windowMs: ipRateLimits?.lookup?.windowMs ?? 60_000 }
   const ipCreateLimits = new Map()
   const ipJoinLimits   = new Map()
   const ipLookupLimits = new Map()
@@ -106,10 +106,11 @@ export function createApp({
     }
 
     for (const [code, group] of Object.entries(groups)) {
-      // Remove members not seen in 60s — covers stuck/zombie sockets that
+      // Remove members not seen in 3 min — covers stuck/zombie sockets that
       // never triggered a disconnect event (e.g. network dropped mid-session).
+      // 3 min gives mobile reconnect flows enough time to complete.
       for (const member of Object.values(group.members)) {
-        if (now - member.lastSeen > 60_000) {
+        if (now - member.lastSeen > 180_000) {
           delete group.members[member.socketId]
           delete socketToGroup[member.socketId]
           const target = io.sockets.sockets.get(member.socketId)

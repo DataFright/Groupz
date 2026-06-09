@@ -179,6 +179,22 @@
   line-height: 1;
 }
 
+/* Reconnecting banner */
+.reconnecting {
+  position: fixed;
+  top: 0;
+  left: 0;
+  right: 0;
+  z-index: 1001;
+  background: rgba(234, 179, 8, 0.9);
+  color: #1c1917;
+  text-align: center;
+  padding: 8px 16px;
+  font-size: 13px;
+  font-weight: 600;
+  backdrop-filter: blur(4px);
+}
+
 /* Geolocation error banner */
 .geoError {
   position: fixed;
