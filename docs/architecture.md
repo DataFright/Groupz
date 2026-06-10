@@ -75,6 +75,35 @@ Key `createApp` options:
 | `ipRateLimits.joinGroup` | `{max:300, windowMs:1h}` | Join rate limit |
 | `ipRateLimits.lookup` | `{max:60, windowMs:1min}` | REST group-lookup rate limit |
 
+## Top bar
+
+The map top bar is split into two halves:
+
+- **Left** — the group code block (`GroupCodeOverlay`) with the raw code, a copy button (⎘, copies the code), and a share button (↗, copies or shares a join link)
+- **Right** — the live member count and, for the host, the **End Group** button
+
+### Share button and join link
+
+Clicking ↗ builds a URL of the form `<origin>/?join=<CODE>` (e.g. `https://groupz-seven.vercel.app/?join=A1B2C3`).
+
+On devices that support the [Web Share API](https://developer.mozilla.org/en-US/docs/Web/API/Navigator/share) (iOS Safari, Android Chrome), the button invokes `navigator.share()` which opens the native system share sheet — the user can send the link directly to a contact or group chat. On desktop or older browsers it falls back to writing the URL to the clipboard.
+
+### Deep-link join
+
+When a user opens a share link, `Home.jsx` reads the `?join=` query parameter via **lazy `useState` initialisers** (not `useEffect`) to avoid triggering a synchronous `setState` call inside an effect:
+
+```js
+const [tab, setTab] = useState(() =>
+  new URLSearchParams(window.location.search).get('join') ? 'join' : 'create'
+)
+const [code, setCode] = useState(() => {
+  const joinCode = new URLSearchParams(window.location.search).get('join')
+  return joinCode ? joinCode.toUpperCase().slice(0, 6) : ''
+})
+```
+
+The Join Group tab is pre-selected and the code input is pre-filled. A cleanup `useEffect` calls `window.history.replaceState({}, '', '/')` to strip the param from the URL after mount so that page refreshes do not re-trigger the pre-fill.
+
 ## Map UX features
 
 ### North compass

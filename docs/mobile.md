@@ -1,5 +1,13 @@
 # Mobile Experience
 
+## Inviting others to a group
+
+The **share button** (↗) in the map top bar is designed for mobile. Tapping it on iOS Safari or Android Chrome opens the native system share sheet — you can send the join link directly to a contact, a group chat, or any other app without copying and pasting. On desktop the link is written to the clipboard instead.
+
+The link takes the form `<origin>/?join=<CODE>`. When the recipient opens it, Groupz loads with the Join Group tab pre-selected and the code already filled in — they just enter their name and tap Join.
+
+---
+
 ## The screen-lock problem
 
 On mobile browsers, locking the phone screen (or pressing the power button, or switching apps) causes the OS to suspend the browser process. When this happens:

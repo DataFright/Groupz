@@ -20,7 +20,7 @@ cd server && npm test
 | `scenarios.test.js` | 26 | Four real-world group shapes: single user, multiple users one group, multiple groups one user each, multiple groups multiple users each — isolation and cross-contamination checks at each layer |
 | `cleanup.test.js` | 11 | Inactivity auto-remove (180s threshold), evicted member receives `removed-from-group`, remaining members receive `members-update`, solo group deleted when last member goes idle, solo disconnect keeps group alive during 3-min grace period (`emptyAt`), group deleted after grace period expires, host transfer on idle host, new host can end after transfer, hard age limit (`maxGroupAgeMs`), `socketToGroup` cleanup on age limit, all-members notified on age limit |
 
-## 2. Client — Vitest (65 tests)
+## 2. Client — Vitest (89 tests)
 
 Located in `client/src/tests/`. Uses React Testing Library with a mocked `socket.io-client` singleton.
 
@@ -31,12 +31,13 @@ cd client && npm test
 | File | Tests | What it covers |
 |---|---|---|
 | `smoke.test.jsx` | 7 | App mounts without crashing, home screen by default, no map on load, tabs present, name input, submit button, 20 icon options |
-| `unit/Home.test.jsx` | 22 | Rendering, tab switching (clears errors), client-side validation (empty name, >16 chars, missing code), socket interaction (connect + emit on submit), auto-uppercase code, loading state, `GROUP_FULL`, `RATE_LIMITED`, `GROUP_NOT_FOUND`, `SERVER_ERROR` error display, socket disconnect on error, re-enables submit after error |
+| `unit/Home.test.jsx` | 29 | Rendering, tab switching (clears errors), client-side validation (empty name, >16 chars, missing code), socket interaction (connect + emit on submit), auto-uppercase code, loading state, `GROUP_FULL`, `RATE_LIMITED`, `GROUP_NOT_FOUND`, `SERVER_ERROR` error display, socket disconnect on error, re-enables submit after error; **deep-link pre-fill** (`?join=CODE`): Join tab selected, code pre-filled and uppercased, URL param cleared after mount, overlong param truncated to 6 chars, no-param and empty-param cases |
+| `unit/GroupCodeOverlay.test.jsx` | 19 | Rendering (code value, copy/share buttons, default icons ⎘/↗); **copy button**: writes raw code to clipboard, shows ✓ feedback, handles failure; **share button — native**: calls `navigator.share` with `origin/?join=CODE` URL, does not write to clipboard, handles cancel/TypeError; **share button — clipboard fallback**: writes join URL, URL format regex, shows ✓ feedback, handles failure |
 | `unit/IconPicker.test.jsx` | 9 | 20 icons rendered, aria-labels, type="button" to prevent form submission, onChange callback, selected CSS class, only one selected at a time, value prop change, 20-entry ICONS array, uniqueness |
 | `unit/GroupMap.wake-lock.test.jsx` | 5 | Screen Wake Lock API: lock requested on mount, re-requested on `visibilitychange` to visible, released on unmount, no-op when `navigator.wakeLock` is unavailable, silent error handling for rejected requests |
 | `integration/AppFlow.test.jsx` | 22 | Mocked socket flow: starts on home, registers/deregisters all listeners, `removed-from-group` and `group-ended` go home with notification and call `socket.disconnect`, `left-group` goes home, `host-changed` marks non-host, create-group navigates to map, `members-update` propagates member count to GroupMap, intentional disconnect skips reconnect, unexpected disconnect stays on map with `isReconnecting=true`, connect-after-disconnect emits `join-group` and clears reconnecting on `join-confirmed`, `reconnect_failed` goes home with notification, `join-error GROUP_NOT_FOUND` during rejoin shows "group ended" message, `join-confirmed` while not rejoining is silently ignored, `join-error` while not rejoining is silently ignored, `visibilitychange` while disconnected triggers `socket.connect` |
 
-## 3. End-to-end — Cypress 13 in Chrome (91 tests, 16 specs)
+## 3. End-to-end — Cypress in Chrome (105 tests, 17 specs)
 
 Located in `client/cypress/e2e/`. Requires both servers running. Uses Chrome headless.
 
@@ -63,6 +64,7 @@ The wrapper script is required when running from VS Code — VS Code sets `ELECT
 | `join-group.cy.js` | 6 | Valid join, non-host sees Leave not End Group, member count, map shows code, error for unknown code, group full error |
 | `group-session.cy.js` | 7 | End Group dialog (open, cancel, confirm), Leave dialog (open, cancel, confirm), Members drawer |
 | `group-code-copy.cy.js` | 2 | Copy button shows ✓ on click, reverts to ⎘ after 2s |
+| `share-link.cy.js` | 14 | **Deep-link pre-fill** (8): Join tab selected on `?join=CODE`, code pre-filled and uppercased, URL param cleared, overlong param truncated, empty param falls back to Create tab, live join from deep link works. **Share button** (6): button present in map, clipboard receives `origin/?join=CODE`, URL matches absolute-URL regex, ✓ feedback shown, reverts to ↗ after 2s, member count visible on same screen |
 | `host-transfer.cy.js` | 2 | Non-host gains End Group button after host disconnects, member count updates |
 | `member-list-multi.cy.js` | 9 | Host perspective: both members visible, You/HOST badges, remove button, removing drops count. Non-host perspective: no remove buttons, HOST badge, You badge |
 | `map-markers.cy.js` | 3 | Own emoji marker appears, own name tooltip appears, second member's marker/tooltip appear when they join with a known location |

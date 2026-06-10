@@ -48,6 +48,18 @@ Names go through `validateInput()` before any group operation:
 2. Must be ≤ 16 characters (after trimming)
 3. Must not contain ASCII control characters (`\x00–\x1f`, `\x7f`) — this rejects embedded newlines (`\n`), carriage returns (`\r`), tabs (`\t`), null bytes, and similar characters that could be used to forge multi-line display
 
+## Share link / deep-link join
+
+The share button in the map top bar constructs a URL of the form:
+
+```
+<origin>/?join=<CODE>
+```
+
+For example: `https://groupz-seven.vercel.app/?join=A1B2C3`
+
+This is a client-side URL — there is no server route for it. When the page loads, `Home.jsx` reads the `?join=` parameter and pre-selects the Join tab with the code filled in. The parameter is removed from the URL immediately after mount via `history.replaceState` so it does not persist across refreshes.
+
 ## REST endpoints
 
 | Method | Path | Auth | Description |
