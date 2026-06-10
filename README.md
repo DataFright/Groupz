@@ -1,6 +1,6 @@
 # Groupz
 
-Real-time group location sharing for caravans, road trips, and meetups. Create a group, share the 6-character code, and see everyone on a live map — no accounts, no sign-up.
+Real-time group location sharing web app for caravans, road trips, meetups, festivals and concerts. Create a group, share the 6-character code, and see everyone on a live map — no accounts, no sign-up and its all free.
 
 **Live:** [groupz-seven.vercel.app](https://groupz-seven.vercel.app)
 
@@ -55,6 +55,7 @@ Leave `VITE_SOCKET_URL` empty in `client/.env` — the Vite dev server proxies s
 | [Testing](docs/testing.md) | Server Vitest (171), Client Vitest (89), Cypress e2e (105 tests, 17 specs), task infrastructure |
 | [Deployment](docs/deployment.md) | Render + Vercel setup, Docker, environment variables, common gotchas |
 | [Benchmarks](docs/benchmarks.md) | Load test results, estimated capacity by tier, scaling path |
+| [Scaling](docs/scaling.md) | Infrastructure cost breakdown by tier, Socket.IO horizontal scaling, provider comparison, Redis, GCP, AWS, cost stacks |
 
 ---
 
@@ -62,10 +63,15 @@ Leave `VITE_SOCKET_URL` empty in `client/.env` — the Vite dev server proxies s
 
 ```
 Groupz/
-├── docs/                   # Architecture, mobile, protocol, testing, deployment, benchmarks
+├── .github/workflows/      # ci.yml (lint + unit tests), e2e.yml (post-deploy Cypress)
+├── docs/                   # architecture, mobile, protocol, testing, deployment, benchmarks, scaling
 ├── docker-compose.yml
 ├── server/
-│   ├── src/                # app.js, helpers.js, errorCodes.js, metrics.js
+│   ├── src/
+│   │   ├── app.js          # Express routes + Socket.IO event handlers (createApp factory)
+│   │   ├── helpers.js      # validateInput, generateCode, buildMemberList, ALLOWED_ICONS
+│   │   ├── errorCodes.js   # ErrorCode constants, ErrorStatus map, makeError()
+│   │   └── metrics.js      # usage stats endpoint
 │   ├── tests/              # unit, smoke, function, integration, scenarios, cleanup, metrics
 │   ├── scripts/            # docker-smoke.js, load-test.js
 │   ├── Dockerfile
@@ -74,8 +80,16 @@ Groupz/
     ├── src/
     │   ├── components/     # Home, GroupMap, MemberList, GroupCodeOverlay, IconPicker
     │   ├── constants/      # icons.js
-    │   ├── tests/          # smoke, unit, integration
-    │   └── App.jsx
-    └── cypress/
-        └── e2e/            # 17 spec files (105 tests)
+    │   ├── styles/         # CSS Modules (App, GroupMap, Home, IconPicker, MemberList, global)
+    │   ├── tests/          # smoke, unit (Home, GroupCodeOverlay, IconPicker, GroupMap), integration
+    │   ├── App.jsx         # view router, socket event handlers, notification banner
+    │   ├── socket.js       # singleton socket.io-client instance
+    │   ├── errorCodes.js   # mirrors server error codes
+    │   └── main.jsx
+    ├── cypress/
+    │   ├── e2e/            # 17 spec files (105 tests)
+    │   └── support/        # commands.js, e2e.js
+    ├── scripts/
+    │   └── cypress-run.cjs # VS Code-safe Cypress launcher (strips ELECTRON_RUN_AS_NODE)
+    └── cypress.config.cjs  # Cypress config + cy.task() socket helpers
 ```
