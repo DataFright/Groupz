@@ -2,11 +2,12 @@
 // MapController is an inner component that lives inside MapContainer so it can
 // access the Leaflet map instance via useMap() and run the geolocation loop.
 
-import { useState, useEffect, useRef, useCallback } from 'react'
+import { useState, useEffect, useReducer, useRef, useCallback } from 'react'
 import { MapContainer, TileLayer, Marker, Tooltip, useMap } from 'react-leaflet'
 import L from 'leaflet'
 import 'leaflet/dist/leaflet.css'
 import { socket } from '../socket.js'
+import { computeOverlapOffsets } from '../utils/computeOverlapOffsets.js'
 import MemberList from './MemberList.jsx'
 import GroupCodeOverlay from './GroupCodeOverlay.jsx'
 import styles from '../styles/GroupMap.module.css'
@@ -35,31 +36,6 @@ function createEmojiIcon(icon, isMe, active, dx = 0, dy = 0) {
   })
 }
 
-// Groups markers at the same position (within ~11m) and spreads them radially
-// so overlapping icons and tooltips don't obscure each other.
-function computeOverlapOffsets(members) {
-  const groups = {}
-  for (const m of members) {
-    const key = `${m.lat.toFixed(4)},${m.lng.toFixed(4)}`
-    if (!groups[key]) groups[key] = []
-    groups[key].push(m.socketId)
-  }
-
-  const offsets  = {}
-  const RADIUS   = 26
-  for (const ids of Object.values(groups)) {
-    if (ids.length === 1) {
-      offsets[ids[0]] = [0, 0]
-    } else {
-      ids.forEach((id, i) => {
-        const angle  = (2 * Math.PI * i) / ids.length
-        offsets[id] = [Math.round(RADIUS * Math.cos(angle)), Math.round(RADIUS * Math.sin(angle))]
-      })
-    }
-  }
-  return offsets
-}
-
 // ─── MapController ─────────────────────────────────────────────────────────────
 // Runs the geolocation poll loop and renders member markers.
 // Must be a child of MapContainer to access the Leaflet map via useMap().
@@ -67,18 +43,26 @@ function computeOverlapOffsets(members) {
 // so the re-center FAB can trigger map.flyTo without re-rendering this component.
 
 function MapController({ members, mySocketId, onGeoError, flyToMeRef }) {
-  const hasCenteredRef = useRef(false)
-  const mapRef         = useRef(null)
-  const myPosRef       = useRef(null)
+  const hasCenteredRef  = useRef(false)
+  const mapRef          = useRef(null)
+  const myPosRef        = useRef(null)
+  const map             = useMap()
+  const [, bumpZoom]    = useReducer(x => x + 1, 0)  // triggers re-render on zoom so offsets recalculate
 
-  const getMap = useCallback((map) => {
-    mapRef.current = map
+  const getMap = useCallback((m) => {
+    mapRef.current = m
     flyToMeRef.current = () => {
       if (mapRef.current && myPosRef.current) {
         mapRef.current.flyTo(myPosRef.current, 15, { duration: 1 })
       }
     }
   }, [flyToMeRef])
+
+  // Pixel distances between markers change on zoom, so recalculate groupings after each zoom.
+  useEffect(() => {
+    map.on('zoomend', bumpZoom)
+    return () => map.off('zoomend', bumpZoom)
+  }, [map, bumpZoom])
 
   useEffect(() => {
     if (!navigator.geolocation) {
@@ -112,7 +96,7 @@ function MapController({ members, mySocketId, onGeoError, flyToMeRef }) {
   }, [onGeoError])
 
   const visible = members.filter(m => m.lat !== null && m.lng !== null)
-  const offsets = computeOverlapOffsets(visible)
+  const offsets = computeOverlapOffsets(visible, map)
 
   return (
     <>

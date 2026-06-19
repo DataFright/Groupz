@@ -20,7 +20,12 @@ vi.mock('react-leaflet', () => ({
   TileLayer: () => null,
   Marker: ({ children }) => React.createElement('div', null, children ?? null),
   Tooltip: ({ children }) => React.createElement('div', null, children ?? null),
-  useMap: () => ({ flyTo: vi.fn() }),
+  useMap: () => ({
+    flyTo:                vi.fn(),
+    on:                   vi.fn(),
+    off:                  vi.fn(),
+    latLngToLayerPoint:   vi.fn(() => ({ x: 0, y: 0 })),
+  }),
 }))
 
 vi.mock('../../socket.js', () => ({
